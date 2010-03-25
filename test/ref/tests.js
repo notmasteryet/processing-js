@@ -16,3 +16,11 @@ var tests = [
   "triangle.pde",
   "box.pde"
 ];
+
+var selfTests = [
+  "self-1-success.pde",
+  "self-2-fail.pde",
+  "self-3-fail.pde",
+  "self-4-fail.pde",
+  "self-5-success.pde"
+];

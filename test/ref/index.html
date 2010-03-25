@@ -12,10 +12,11 @@
   </head>
   <body>
     <h1>Processing.js Ref Test Runner</h1>
-    <p>To start the tests click Start.  Each test is run in order (downloaded from the server).  The first canvas is the reference image, the second is a live sketch that has just been executed, the third is a visual diff.  The diff is calculated with a tolerance value (e.g., ~2%).  If the third canvas is green, the test passed.  If it is white with red pixels (or all red), it failed, and the red shows where the pixels differ.  You can generate ref tests <a href="../../tools/processing-helper.html">here</a>.</p>
+    <p>To start the tests click Start.  Each test is run in order (downloaded from the server).  The first canvas is the reference image, the second is a live sketch that has just been executed, the third is a visual diff.  The diff is calculated with a tolerance value (e.g., ~5%).  If the third canvas is green, the test passed.  If it is white with red pixels (or all red), it failed, and the red shows where the pixels differ. The self-testing must fail on some tests.  You can generate ref tests <a href="../../tools/processing-helper.html">here</a>.</p>
 
     <h3>Settings</h3>
-    <div>Run Tests: <select id="test-type"><option value="both">All</option><option value="2D">2D</option><option value="3D">3D</option></select>&nbsp;Blur Radius: <input type="text" size="2" id="sigma" onchange="updateTolerance();">&nbsp;Epsilon: <input type="text" size="4" id="epsilon" onchange="updateTolerance();">&nbsp;<input onclick="runTests();" type="button" value="Start"></input><span id="testCount"></span></div>
+    <div>Run Tests: <select id="test-type"><option value="both">All</option><option value="2D">2D</option><option value="3D">3D</option></select>&nbsp;Blur Radius: <input type="text" size="2" id="sigma" onchange="updateTolerance();">&nbsp;Epsilon (0-1.0): <input type="text" size="4" id="epsilon" onchange="updateTolerance();">&nbsp;<input onclick="runTests(tests);" type="button" value="Start"></input><span id="testCount"></span></div>
+    <div>Run self-tests with the parameters above: <input onclick="runTests(selfTests);" type="button" value="Start Self-Tests"></input></div>
 
     <h3>Results</h3>
     <div id="results" style="margin: 5px; padding-top: 10px;"></div>
@@ -30,7 +31,7 @@
       // Tolerance values and kernel for blur
       var sigma = 2; // radius
       document.getElementById('sigma').value = sigma;
-      var epsilon = 5.11; // match accuracy 5.11 = ~2%
+      var epsilon = 0.05; // match accuracy ~5%
       document.getElementById('epsilon').value = epsilon;
       var kernel, kernelSize, kernelSum;
       buildKernel();
@@ -131,7 +132,7 @@
         }
       }
 
-      function runTests() {
+      function runTests(tests) {
         // See if we're running All, 2D-only or 3D-only tests
         var testTypeChoice = document.getElementById('test-type').value;
 
@@ -214,6 +215,7 @@
           title.className = "title";
           result.appendChild(title);
           results.appendChild(result);
+          var valueEpsilon = epsilon * 255;
 
           if (test) {
             // Skip test if it doesn't match chosen type
@@ -277,10 +279,10 @@
               var tp = test.pixels;
               var failed = false;
               for (var j=0; j < pixelsLen;) {
-                if (Math.abs(currData[j] - tp[j]) < epsilon  &&
-                    Math.abs(currData[j + 1] - tp[j + 1]) < epsilon &&
-                    Math.abs(currData[j + 2] - tp[j + 2]) < epsilon &&
-                    Math.abs(currData[j + 3] - tp[j + 3]) < epsilon)  {
+                if (Math.abs(currData[j] - tp[j]) < valueEpsilon  &&
+                    Math.abs(currData[j + 1] - tp[j + 1]) < valueEpsilon &&
+                    Math.abs(currData[j + 2] - tp[j + 2]) < valueEpsilon &&
+                    Math.abs(currData[j + 3] - tp[j + 3]) < valueEpsilon)  {
                   diffData.data[j] = diffData.data[j+1] = diffData.data[j+2] = diffData.data[j+3] = 0;
                 } else {
                   diffData.data[j] = 255;
