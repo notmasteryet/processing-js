@@ -387,21 +387,445 @@
   // Place-holder for debugging function
   Processing.debug = function(e) {};
 
-  // Parse Processing (Java-like) syntax to JavaScript syntax with Regex
-  Processing.parse = function parse(aCode, p) {
+// Parser starts
+function parseProcessing(code) {
+  function splitToAtoms(s) {
+    var atoms = [], stack = [];
+    var items = s.split(/([\{\[\(\)\]\}])/);
+    s = items[0];
+    for(var i=1; i < items.length; i += 2) {
+      var item = items[i];
+      if(item === '[' || item === '{' || item === '(') {
+        stack.push(s); s = item;
+      } else if(item === ']' || item === '}' || item === ')') {
+        var kind = item === '}' ? 'A' : item === ')' ? 'B' : 'C';
+        var index = atoms.length; atoms.push(s + item);
+        s = stack.pop() + '"' + kind + (index + 1) + '"';
+      }
+      s += items[i + 1];
+    }
+    atoms.unshift(s);
+    return atoms;
+  }
 
-    // Force characters-as-bytes to work.
-    //aCode = aCode.replace(/('(.){1}')/g, "$1.charCodeAt(0)");
-    aCode = aCode.replace(/'.{1}'/g, function(all) {
-      return "(new Char(" + all + "))";
+  function injectStrings(s, strings) {
+    return s.replace(/'(\d+)'/g, function(all, index) {
+      var val = strings[index];
+      return (/^'((?:[^'\\\n])|(?:\\.[^'\n]*))'$/).test(val) ? "(new Char(" + val + "))" : val;
     });
+  }
 
-    // Parse out @pjs directive, if any.
+  function trimSpaces(s) {
+    var m1 = /^\s*/.exec(s), result;
+    if(m1[0].length === s.length) {
+      result = {left: m1[0], middle: "", right: ""};
+    } else {
+      var m2 = /\s*$/.exec(s);
+      result = {left: m1[0], middle: s.substring(m1[0].length, m2.index), right: m2[0]};
+    }
+    result.untrim = function(t) { return this.left + t + this.right; };  
+    return result;
+  }
+
+  function assembleAtoms(atoms, index) {
+    var s = atoms[index];
+    return s.replace(/"[A-Z](\d+)"/g, function(all, i) {
+      return assembleAtoms(atoms, i);
+    });
+  }
+
+  function getAtomIndex(templ) { return templ.substring(2, templ.length - 1); }
+
+  var s = code.replace(/\r\n?|\n\r/g, "\n"); // remove extra CR
+  var strings = [];
+
+  // replace strings
+  s = s.replace(/("([^"\\\n]|\\.)*")|('([^'\\\n]|\\.)*')/g, function(all) {
+    var index = strings.length; strings.push(all); return "'" + index + "'";
+  });
+  
+  // kill comments
+  s = s.replace(/\/\/[^\n]*\n/g, "\n").replace(/\/\*((?!\*\/)(?:.|\n))*\*\//g, " ");
+
+  var atoms = splitToAtoms(s);
+
+  // function defined below
+  var assembleClassBody, assembleStatementsBlock, assembleStatements, assembleMain;
+
+  var classesRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)(class|interface)\s+([A-Za-z_$][\w$]*\b)(\s+extends\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\b)?(\s+implements\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\b)*)?\s*("A\d+")/g;
+  var methodsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:else|new|return|throw)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)*)?\s*("A\d+"|;)/g;
+  var fieldTest = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:else|new|return|throw)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*(?:"C\d+"\s*)*([=,]|$)/;
+  var cstrsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)*)?\s*("A\d+")/g;
+  var attrAndTypeRegex = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*/;
+
+  function extractClassesAndMethods(code) {
+    var s = code;
+    s = s.replace(classesRegex, function(all) {
+      var index = atoms.length; atoms.push(all);      
+      return '"E' + index + '"';
+    });
+    s = s.replace(methodsRegex, function(all) {
+      var index = atoms.length; atoms.push(all);
+      return '"D' + index + '"';
+    });
+    return s;
+  }
+
+  function extractConstructors(code, className) {
+    var s = code;
+    s = s.replace(cstrsRegex, function(all, attr, name, params, throws_, body) {
+      if(name !== className) {
+        return all;
+      } else {
+        var index = atoms.length; atoms.push(all);      
+        return '"G' + index + '"';
+      }
+    });
+    return s;
+  }
+
+  function assembleParams(params) {
+    var paramsWoPars = params.substring(1, params.length - 1).trim();
+    if(paramsWoPars === "") { return "()"; }
+
+    var result = [];
+    var paramList = paramsWoPars.split(",");
+    for(var i=0; i < paramList.length; ++i) {
+      var param = /\b([A-Za-z_$][\w$]*\b)\s*$/.exec(paramList[i]);
+      result.push(param[1]);
+    }
+    return "(" + result.join(", ") + ")";
+  }
+
+  function preExpressionTransform(expr) {
+    var s = expr;
+    // new type[] {...} --> {...}
+    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)(?:\s*"C\d+")+\s*("A\d+")/g, function(all, type, init) {
+      return init;
+    });
+    // new Runnable() {...} --> "F???"
+    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)(?:\s*"B\d+")\s*("A\d+")/g, function(all, type, init) {
+      var index = atoms.length; atoms.push(all);
+      return '"F' + index + '"';
+    });
+    // function(...) { } --> "H???"
+    s = s.replace(/\bfunction\s*"B\d+"\s*"A\d+"/g, function(all) {
+      var index = atoms.length; atoms.push(all);
+      return '"H' + index + '"';
+    });    
+    // new type[?] --> new ArrayList(?)
+    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)\s*("C\d+"(?:\s*"C\d+")*)/g, function(all, type, index) {
+      var args = index.replace(/"C(\d+)"/g, function(all, j) { return atoms[j]; }).
+        replace(/\[\s*\]/g, "[0]").replace(/\s*\]\s*\[\s*/g, ", ");
+      
+      var newIndex = atoms.length;
+      atoms.push("(" + args.substring(1, args.length - 1) + ")");      
+      return 'new ArrayList"B' + newIndex + '"';
+    });
+    // .length() --> .length
+    s = s.replace(/(\.\s*length)\s*"B\d+"/g, "$1");
+    // #000000 --> 0x000000
+    s = s.replace(/#([0-9A-Fa-f]+)/g, function(all, digits) {
+      return digits.length < 6 ? "0x" + digits : "0xFF000000".substring(0, 10 - digits.length) + digits;
+    });
+    // delete (type)???, (int)??? -> 0|???
+    s = s.replace(/"B(\d+)"(\s*[\w$']|"B)/g, function(all, index, next) {
+      var atom = atoms[index];
+      if(!/^\(\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\s*(?:"C\d+"\s*)*\)$/.test(atom)) {
+        return all;
+      } else if(/^\(\s*int\s*\)$/.test(atom)) {
+        return "0|" + next;
+      } else {
+        var indexParts = atom.split(/"C(\d+)"/g);
+        if(indexParts.length > 1) {
+          // even items contains atom numbers, can check only first
+          if(! /^\[\s*\]$/.test(atoms[indexParts[1]])) { 
+            return all; // fallback - not a cast
+          }
+        }
+        return "" + next;
+      }
+    });
+    // super() -> superMethod();
+    s = s.replace(/\bsuper(\s*"B\d+")/g, "superMethod$1");
+    // 3.0f -> 3.0
+    s = s.replace(/\b(\.?\d+)f/g, "$1");
+    // Weird (?) parsing errors with %
+    s = s.replace(/([^\s])%([^=\s])/g, "$1 % $2");
+    // Since frameRate() and frameRate are different things,
+    // we need to differentiate them somehow. So when we parse
+    // the Processing.js source, replace frameRate so it isn't
+    // confused with frameRate().
+    s = s.replace(/\bframeRate(?!\s*"B)/, "p.FRAME_RATE");
+    
+    return s;
+  }
+
+  function assembleInlineClass(class_) {
+    var m = new RegExp(/\bnew\s*(Runnable)\s*"B\d+"\s*"A(\d+)"/).exec(class_);
+    if(m === null) {
+      return "undefined";
+    } else {
+      // only Runnable supported
+      return "new (function() { with(this) {\n" +
+        assembleClassBody(atoms[m[2]], m[1]) + "}})";
+    }
+  }
+
+  function assembleFunction(class_) {
+    // TODO remove function() {} contruct. See inline class instead
+    var m = new RegExp(/"B(\d+)"\s*"A(\d+)"/).exec(class_);
+    return "function" + atoms[m[1]] + " " + assembleStatementsBlock(atoms[m[2]]);
+  }
+
+  var assembleExpression = function(expr) {
+    if(expr.charAt(0) === '(' || expr.charAt(0) === '[') {
+      return expr.charAt(0) + assembleExpression(expr.substring(1, expr.length - 1)) + expr.charAt(expr.length - 1);
+    } else if(expr.charAt(0) === '{') {
+      return " [" + assembleExpression(expr.substring(1, expr.length - 1)) + "] ";
+    } else {
+      var trimmed = trimSpaces(expr);
+      var s = preExpressionTransform(trimmed.middle);
+      s = s.replace(/"[ABC](\d+)"/g, function(all, index) {
+        return assembleExpression(atoms[index]);
+      });
+      s = s.replace(/"H(\d+)"/g, function(all, index) {
+        return assembleFunction(atoms[index]);
+      });
+      s = s.replace(/"F(\d+)"/g, function(all, index) {
+        return assembleInlineClass(atoms[index]);
+      });
+      return trimmed.untrim( s );
+    }
+  };
+
+  function assembleVarDefinition(def, defaultTypeValue) {
+    var eqIndex = def.indexOf("=");
+    var name, value;
+    if(eqIndex < 0) { 
+      name = def;
+      value = " = " + defaultTypeValue; 
+    } else {
+      name = def.substring(0, eqIndex + 1);
+      value =  assembleExpression(def.substring(eqIndex + 1));
+    }        
+    return name.replace(/(\s*"C\d+")+/g, "") + value;
+  }
+  
+  function getDefaultValueForType(type) {
+      if(type === "int" || type === "float") {
+        return "0";
+      } else if(type === "boolean") {
+        return "false";
+      } else if(type === "color") {
+        return "0x00000000";
+      } else {
+        return "null";
+      }
+  }
+
+  function assembleStatement(statement) {
+    if(fieldTest.test(statement)) {
+      var attrAndType = attrAndTypeRegex.exec(statement);
+      var definitions = statement.substring(attrAndType[0].length).split(",");
+      var defaultTypeValue = getDefaultValueForType(attrAndType[2]);
+      for(var i=0; i < definitions.length; ++i) {
+        definitions[i] = assembleVarDefinition(definitions[i], defaultTypeValue);
+      }
+      return "var " + definitions.join(",");
+    } else {
+      return assembleExpression(statement);
+    }
+  }
+
+  function assembleForExpression(expr) {
+    var content = expr.substring(1, expr.length - 1).split(";");
+    return "(" + assembleStatement(content[0]) + "; " +
+      assembleExpression(content[1]) + "; " + assembleExpression(content[2]) + ")";
+  }
+
+  function assembleInnerClass(class_) {
+    var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
+    classesRegex.lastIndex = 0;
+    var body = atoms[getAtomIndex(m[6])];
+    if(m[2] === "interface") {
+      return "this." + m[3] + " = function " + m[3] + "() { throw 'This is an interface'; };";     
+    } else {
+      var result = "this." + m[3] + " = function " + m[3] + "() { with(this) {\n";     
+      result += assembleClassBody(body, m[3], m[4], m[5]);
+      result += "}};";
+      return result;
+    }
+  }
+
+  function assembleClassMethod(method) {
+    var m = methodsRegex.exec(method);
+    methodsRegex.lastIndex = 0;
+    var result = "addMethod(this, '" + m[3] + "', function " + assembleParams(atoms[getAtomIndex(m[4])]) + " " +
+       assembleStatementsBlock(atoms[getAtomIndex(m[6])]) +");";
+    return result;
+  }
+
+  function assembleClassField(statement) {
+    var attrAndType = attrAndTypeRegex.exec(statement);
+    var definitions = statement.substring(attrAndType[0].length).split(/,\s*/g);
+    var defaultTypeValue = getDefaultValueForType(attrAndType[2]);
+    for(var i=0; i < definitions.length; ++i) {
+      definitions[i] = assembleVarDefinition(definitions[i], defaultTypeValue);
+    }
+    return "this." + definitions.join("; this.");
+  }
+
+  assembleClassBody = function(body, name, base, impls) {
+    var declarations = body.substring(1, body.length - 1);
+    declarations = extractClassesAndMethods(declarations);
+    declarations = extractConstructors(declarations, name);
+    var methods = [], classes = [], cstrs = [];
+    declarations = declarations.replace(/"([DEG])(\d+)"/g, function(all, type, index) {
+      if(type === 'D') { methods.push(index); } else if(type === 'E') { classes.push(index); } else { cstrs.push(index); }
+      return "";
+    });
+    var fields = declarations.split(';');
+    var i, result = "", baseClassName;
+    if(base !== undefined) {
+      baseClassName = base.replace(/^\s*extends\s+([A-Za-z_$][\w$]+)\s*$/g, "$1");
+      result += "var __self=this;function superMethod(){extendClass(__self,arguments," + baseClassName + ");}\n";
+    }
+    for(i = 0; i < methods.length; ++i) {
+      result += assembleClassMethod(atoms[methods[i]]) + '\n';
+    }
+    for(i = 0; i < fields.length - 1; ++i) {
+      var field = trimSpaces(fields[i]);
+      result += field.untrim(assembleClassField(field.middle)) + ';';
+    }
+    result += fields[fields.length - 1];
+    if(base !== undefined) {
+      result += "extendClass(__self,arguments);\n";
+    }
+    var cstrIfs = [];
+    for(i = 0; i < cstrs.length; ++i) {
+      var m = new RegExp(/"B(\d+)"\s+"A(\d+)"/).exec(atoms[cstrs[i]]);
+      var params = assembleParams(atoms[m[1]]);
+      var paramNames = params.substring(1, params.length - 1).split(", ");
+      if(paramNames.length === 1 && paramNames[0] === '') { paramNames = []; }
+      
+      var cstrBody = atoms[m[2]];
+      cstrBody = cstrBody.substring(1, cstrBody.length - 1);
+      
+      var prefix = "if(arguments.length === " + paramNames.length + ") {\n";
+      for(var j = 0; j < paramNames.length; ++j) {
+        prefix += "  var " + paramNames[j] + " = arguments[" + j + "];\n";
+      }
+
+      cstrIfs.push(prefix + assembleStatements(cstrBody) + '}\n');
+    }
+    result += cstrIfs.join(" else ");
+    for(i = 0; i < classes.length; ++i) {
+      result += assembleInnerClass(atoms[classes[i]]) + '\n';
+    }
+    return result;
+  };
+
+  function assembleGlobalClass(class_) {
+    var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
+    classesRegex.lastIndex = 0;
+    var body = atoms[getAtomIndex(m[6])];
+    if(m[2] === "interface") {
+      return "processing." + m[3] + " = function " + m[3] + "() { throw 'This is an interface'; };";     
+    } else {
+      var result = "processing." + m[3] + " = function " + m[3] + "() { with(this) {\n" +
+        assembleClassBody(body, m[3], m[4], m[5]) + "}};";
+      return result;
+    }
+  }
+
+  function assembleGlobalMethod(method) {
+    var m = methodsRegex.exec(method);
+    var result = "processing." + m[3] + " = function " + m[3] + assembleParams(atoms[getAtomIndex(m[4])]) + " " +
+       assembleStatementsBlock(atoms[getAtomIndex(m[6])]) +";";
+    methodsRegex.lastIndex = 0;
+    return result;
+  }
+  
+  function preStatementsTransform(statements) {
+    var s = statements;
+    s = s.replace(/\b(catch\s*"B\d+"\s*"A\d+")(\s*catch\s*"B\d+"\s*"A\d+")+/g, "$1");
+    return s;
+  }
+
+  assembleStatements = function(statements, assembleMethod, assembleClass) {
+    var nextStatement = new RegExp(/\b(catch|for|if|switch|while)\s*"B(\d+)"|\b(do|else|finally|return|throw|try|break|continue)\b|("[ADE](\d+)")|\b((?:case\s[^:]+|[A-Za-z_$][\w$]+\s*):)|(;)/g);
+    var res = "";
+    statements = preStatementsTransform(statements);
+    var lastIndex = 0, m, space;
+    while((m = nextStatement.exec(statements)) !== null) {
+      if(m[1] !== undefined) { // catch, for ...
+        var i = statements.lastIndexOf('"B', nextStatement.lastIndex);
+        res += statements.substring(lastIndex, i);
+        if(m[1] === "for") {
+          res += assembleForExpression(atoms[m[2]]);
+        } else if(m[1] === "catch") {
+          res += assembleParams(atoms[m[2]]);
+        } else {
+          res += assembleExpression(atoms[m[2]]);
+        }
+      } else if(m[3] !== undefined) { // do, else, ...
+        res += statements.substring(lastIndex, nextStatement.lastIndex);
+      } else if(m[4] !== undefined) { // block, class and methods
+        space = statements.substring(lastIndex, nextStatement.lastIndex - m[4].length);
+        if(space.trim().length !== 0) { continue; } // avoiding new type[] {} construct
+        res += space;
+        if(m[4].charAt(1) === 'D') { 
+          res += assembleMethod(atoms[m[5]]);
+        } else if(m[4].charAt(1) === 'E') { 
+          res += assembleClass(atoms[m[5]]);
+        } else {
+          res += assembleStatementsBlock(atoms[m[5]]);
+        }
+      } else if(m[6] !== undefined) { // label
+        space = statements.substring(lastIndex, nextStatement.lastIndex - m[6].length);
+        if(space.trim().length !== 0) { continue; } // avoiding ?: construct
+        res += statements.substring(lastIndex, nextStatement.lastIndex);
+      } else { // semicolon
+        var statement = trimSpaces(statements.substring(lastIndex, nextStatement.lastIndex - 1));
+        res += statement.untrim(assembleStatement(statement.middle)) + ";";
+      }
+      lastIndex = nextStatement.lastIndex;
+    }    
+    res += statements.substring(lastIndex);
+    return res;
+  };
+
+  assembleStatementsBlock = function(block) {
+    var content = trimSpaces(block.substring(1, block.length - 1));
+    var statements = content.middle;
+    return "{" + content.untrim(assembleStatements(statements)) + "}";
+  };
+
+  assembleMain = function() {     
+    var statements = extractClassesAndMethods(atoms[0]);
+    statements = statements.replace(/\bimport\s+[^;]+;/g, "");
+    return assembleStatements(statements, assembleGlobalMethod, assembleGlobalClass);
+  };
+
+  var transformed = assembleMain();
+  // remove empty extra lines with space
+  transformed = transformed.replace(/\s*\n(?:[\t ]*\n)+/g, "\n\n");
+
+  return injectStrings(transformed, strings);
+}
+
+// Parser ends
+
+  // Parse Processing (Java-like) syntax to JavaScript syntax by using "light-AST"
+  Processing.parse = function parse(aCode, p) {
     p.pjs = {
       imageCache: {
         pending: 0
       }
     }; // by default we have an empty imageCache, no more.
+
+    // Parse out @pjs directive, if any.
     var dm = /\/\*\s*@pjs\s+((?:[^\*]|\*+[^\*\/])*)\*\//g.exec(aCode);
     if (dm && dm.length === 2) {
       var directives = dm.splice(1, 2)[0].replace('\n', '').replace('\r', '').split(';');
@@ -443,296 +867,15 @@
       aCode = aCode.replace(dm[0], '');
     }
 
-    // Saves all strings into an array
-    // masks all strings into <STRING n>
-    // to be replaced with the array strings after parsing is finished
-    var strings = [];
-    aCode = aCode.replace(/(["'])(\\\1|.)*?(\1)/g, function(all) {
-      strings.push(all);
-      return "<STRING " + (strings.length - 1) + ">";
-    });
-
-    // Windows newlines cause problems: 
-    aCode = aCode.replace(/\r\n?/g, "\n");
-
-    // Remove end-of-line comments
-    aCode = aCode.replace(/\/\/.*\n/g, "\n");
-
-    // Weird parsing errors with %
-    aCode = aCode.replace(/([^\s])%([^\s])/g, "$1 % $2");
-
-    // Since frameRate() and frameRate are different things,
-    // we need to differentiate them somehow. So when we parse
-    // the Processing.js source, replace frameRate so it isn't
-    // confused with frameRate().
-    aCode = aCode.replace(/(\s*=\s*|\(*\s*)frameRate(\s*\)+?|\s*;)/, "$1p.FRAME_RATE$2");
-
-    // Simple convert a function-like thing to function
-    aCode = aCode.replace(/(?:static )?(\w+(?:\[\])* )(\w+)\s*(\([^\)]*\)\s*\{)/g, function(all, type, name, args) {
-      if (name === "if" || name === "for" || name === "while") {
-        return all;
-      } else {
-        return "processing." + name + " = function " + name + args;
-      }
-    });
-
-    // Attach import() to p{} bypassing JS command, allowing for extrernal library loading
-    //aCode = aCode.replace(/import \(|import\(/g, "p.Import(");
-    // Delete import statements, ie. import processing.video.*;
-    // https://processing-js.lighthouseapp.com/projects/41284/tickets/235-fix-parsing-of-java-import-statement
-    aCode = aCode.replace(/import\s+(.+);/g, "");
-
-    //replace  catch (IOException e) to catch (e)
-    aCode = aCode.replace(/catch\s*\(\W*\w*\s+(\w*)\W*\)/g, "catch ($1)");
-
-    //delete  the multiple catch block
-    var catchBlock = /(catch[^\}]*\})\W*catch[^\}]*\}/;
-
-    while (catchBlock.test(aCode)) {
-      aCode = aCode.replace(new RegExp(catchBlock), "$1");
-    }
-
     Error.prototype.printStackTrace = function() {
-      this.toString();
+       this.toString();
     };
-
-    // Force .length() to be .length
-    aCode = aCode.replace(/\.length\(\)/g, ".length");
-
-    // foo( int foo, float bar )
-    aCode = aCode.replace(/([\(,]\s*)(\w+)((?:\[\])+| )\s*(\w+\s*[\),])/g, "$1$4");
-    aCode = aCode.replace(/([\(,]\s*)(\w+)((?:\[\])+| )\s*(\w+\s*[\),])/g, "$1$4");
-
-    // float[] foo = new float[5];
-    aCode = aCode.replace(/new\s+(\w+)\s*((?:\[(?:[^\]]*)\])+)\s*(\{[^;]*\}\s*;)*/g, function(all, name, args, initVars) {
-      if (initVars) {
-        return initVars;
-      } else {
-        return "new ArrayList(" + args.replace(/\[\]/g, "[0]").slice(1, -1).split("][").join(", ") + ");";
-      }
-    });
-
-    // What does this do? This does the same thing as "Fix Array[] foo = {...} to [...]" below
-    aCode = aCode.replace(/(?:static )?\w+\[\]\s*(\w+)\[?\]?\s*=\s*\{.*?\};/g, function(all) {
-      return all.replace(/\{/g, "[").replace(/\}/g, "]");
-    });
-
-    // int|float foo;
-    var intFloat = /(\s*(?:int|float)\s+(?!\[\])*(?:\s*|[^\(;]*?,\s*))([a-zA-Z]\w*)\s*(,|;)/i;
-    while (intFloat.test(aCode)) {
-      aCode = (function() {
-        return aCode.replace(new RegExp(intFloat), function(all, type, name, sep) {
-          return type + " " + name + " = 0" + sep;
-        });
-      }());
-    }
-
-    // float foo = 5;
-    aCode = aCode.replace(/(?:static\s+)?(?:final\s+)?(\w+)((?:\[\s*\])+|\s)\s*(\w+)\[?\]?(\s*[=,;])/g, function(all, type, arr, name, sep) {
-      if (type === "return" || type === "else") {
-        return all;
-      } else {
-        return "var " + name + sep;
-      }
-    });
-
-    // Fix Array[] foo = {...} to [...]
-    aCode = aCode.replace(/\=\s*\{((.|\s)*?\};)/g, function(all, data) {
-      return "= [" + data.replace(/\{/g, "[").replace(/\}/g, "]");
-    });
-
-    // super() is a reserved word
-    aCode = aCode.replace(/super\(/g, "superMethod(");
-
-    // implements Int1, Int2 
-    aCode = aCode.replace(/implements\s+(\w+\s*(,\s*\w+\s*)*) \{/g, function(all, interfaces) {
-      var names = interfaces.replace(/\s+/g, "").split(",");
-      return "{ var __psj_interfaces = new ArrayList([\"" + names.join("\", \"") + "\"]);";
-    });
-
-    var classes = ["int", "float", "boolean", "String", "byte", "double", "long", "ArrayList"];
-
-    var classReplace = function(all, name, extend, vars, last) {
-      classes.push(name);
-
-      var staticVar = "";
-
-      vars = vars.replace(/final\s+var\s+(\w+\s*=\s*.*?;)/g, function(all, setting) {
-        staticVar += " " + name + "." + setting;
-        return "";
-      });
-
-
-      // Move arguments up from constructor and wrap contents with
-      // a with(this), and unwrap constructor
-      return "function " + name + "() {with(this){\n " + 
-              (extend ? "var __self=this;function superMethod(){extendClass(__self,arguments," + extend + ");}\n" : "") +
-              // Replace var foo = 0; with this.foo = 0;
-              // and force var foo; to become this.foo = null;
-              vars.replace(/\s*,\s*/g, ";\n  this.").replace(/\b(var |final |public )+\s*/g, "this.").replace(/\b(var |final |public )+\s*/g, "this.").replace(/this\.(\w+);/g, "this.$1 = null;") + 
-              (extend ? "extendClass(this, " + extend + ");\n" : "") + 
-              "<CLASS " + name + " " + staticVar + ">" + 
-              (typeof last === "string" ? last : name + "(");
-    };
-
-    var nextBrace = function(right) {
-      var rest = right,
-        position = 0,
-        leftCount = 1,
-        rightCount = 0;
-
-      while (leftCount !== rightCount) {
-        var nextLeft = rest.indexOf("{"),
-          nextRight = rest.indexOf("}");
-
-        if (nextLeft < nextRight && nextLeft !== -1) {
-          leftCount++;
-          rest = rest.slice(nextLeft + 1);
-          position += nextLeft + 1;
-        } else {
-          rightCount++;
-          rest = rest.slice(nextRight + 1);
-          position += nextRight + 1;
-        }
-      }
-
-      return right.slice(0, position - 1);
-    };
-
-    var matchClasses = /(?:public |abstract |static )*class (\w+)\s*(?:extends\s*(\w+)\s*)?\{\s*((?:.|\n)*?)\b\1\s*\(/g;
-    var matchNoCon = /(?:public |abstract |static )*class (\w+)\s*(?:extends\s*(\w+)\s*)?\{\s*((?:.|\n)*?)(processing)/g;
-
-    aCode = aCode.replace(matchClasses, classReplace);
-    aCode = aCode.replace(matchNoCon, classReplace);
-
-    var matchClass = /<CLASS (\w+) (.*?)>/,
-      m;
-
-    while ((m = aCode.match(matchClass))) {
-      var left = RegExp.leftContext,
-        allRest = RegExp.rightContext,
-        rest = nextBrace(allRest),
-        className = m[1],
-        staticVars = m[2] || "";
-
-      allRest = allRest.slice(rest.length + 1);
-
-      rest = (function() {
-        return rest.replace(new RegExp("\\b" + className + "\\(([^\\)]*?)\\)\\s*{", "g"), function(all, args) {
-          args = args.split(/,\s*?/);
-
-          if (args[0].match(/^\s*$/)) {
-            args.shift();
-          }
-
-          var fn = "if ( arguments.length === " + args.length + " ) {\n";
-
-          for (var i = 0; i < args.length; i++) {
-            fn += " var " + args[i] + " = arguments[" + i + "];\n";
-          }
-
-          return fn;
-        });
-      }());
-
-      // Fix class method names
-      // this.collide = function() { ... }
-      // and add closing } for with(this) ...
-      rest = (function() {
-        return rest.replace(/(?:public )?processing.\w+ = function (\w+)\((.*?)\)/g, function(all, name, args) {
-          return "ADDMETHOD(this, '" + name + "', function(" + args + ")";
-        });
-      }());
-
-      var matchMethod = /ADDMETHOD([\s\S]*?\{)/, mc, methods = "";
-
-      while ((mc = rest.match(matchMethod))) {
-        var prev = RegExp.leftContext,
-          allNext = RegExp.rightContext,
-          next = nextBrace(allNext);
-
-        methods += "addMethod" + mc[1] + next + "});";
-
-        rest = prev + allNext.slice(next.length + 1);
-      }
-
-      rest = methods + rest;
-
-      aCode = left + rest + "\n}}" + staticVars + allRest;
-    }
-
-    // Do some tidying up, where necessary
-    aCode = aCode.replace(/processing.\w+ = function addMethod/g, "addMethod");
-
-
+    
+    aCode = parseProcessing(aCode);
+    
     // Check if 3D context is invoked -- this is not the best way to do this.
     if (aCode.match(/size\((?:.+),(?:.+),\s*(OPENGL|P3D)\s*\);/)) {
       p.use3DContext = true;
-    }
-
-    // Handle (int) Casting
-    aCode = aCode.replace(/\(int\)/g, "0|");
-
-    // Remove Casting
-    aCode = aCode.replace(new RegExp("\\((" + classes.join("|") + ")(\\[\\])*\\)", "g"), "");
-
-    // Force numbers to exist //
-    //aCode = aCode.replace(/([^.])(\w+)\s*\+=/g, "$1$2 = ($2||0) +");
-    var toNumbers = function(str) {
-      var ret = [];
-
-      str.replace(/(..)/g, function(str) {
-        ret.push(parseInt(str, 16));
-      });
-
-      return ret;
-    };
-
-    // Convert #aaaaaa into color
-    aCode = aCode.replace(/#([a-f0-9]{6})/ig, function(m, hex) {
-      var num = toNumbers(hex);
-      return "defaultColor(" + num[0] + "," + num[1] + "," + num[2] + ")";
-    });
-
-    // Convert 3.0f to just 3.0
-    aCode = aCode.replace(/(\d+)f/g, "$1");
-
-    // replaces all masked strings from <STRING n> to the appropriate string contained in the strings array
-    for (var n = 0; n < strings.length; n++) {
-      aCode = (function() {
-        return aCode.replace(new RegExp("(.*)(<STRING " + n + ">)(.*)", "g"), function(all, quoteStart, match, quoteEnd) {
-          var returnString = all,
-            notString = true,
-            quoteType = "",
-            escape = false;
-
-          for (var x = 0; x < quoteStart.length; x++) {
-            if (notString) {
-              if (quoteStart.charAt(x) === "\"" || quoteStart.charAt(x) === "'") {
-                quoteType = quoteStart.charAt(x);
-                notString = false;
-              }
-            } else {
-              if (!escape) {
-                if (quoteStart.charAt(x) === "\\") {
-                  escape = true;
-                } else if (quoteStart.charAt(x) === quoteType) {
-                  notString = true;
-                  quoteType = "";
-                }
-              } else {
-                escape = false;
-              }
-            }
-          }
-
-          if (notString) { // Match is not inside a string
-            returnString = quoteStart + strings[n] + quoteEnd;
-          }
-
-          return returnString;
-        });
-      }());
     }
 
     return aCode;
@@ -7097,7 +7240,7 @@
     ////////////////////////////////////////////////////////////////////////////
 
     p.init = function init(code) {
-      if (code) {
+      if (code) {        
         var parsedCode = Processing.parse(code, p);
 
         if (!p.use3DContext) {
