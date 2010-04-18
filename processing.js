@@ -46,17 +46,28 @@
 
     // Build an Processing functions and env. vars into 'p'  
     var p = Processing.build(aElement);
-
+    
     // Send aCode Processing syntax to be converted to JavaScript
     if (aCode) {
       p.init(aCode);
     }
-
-    return p;
+    
+    p.raiseEvent("load");
+    
+    return p.getFacade();
   };
 
   // Share lib space
   Processing.lib = {};
+  
+  // Gets processing object for the element
+  Processing.getFacade = function(aElement) {
+    if (typeof aElement === "string") {
+      aElement = document.getElementById(aElement);
+    }
+    var p = aElement.dataProcessing; 
+    return p.getFacade();
+  };
 
   // IE Unfriendly AJAX Method
   var ajax = function(url) {
@@ -772,6 +783,7 @@
     var curContext;
     p.use3DContext = false; // default '2d' canvas context
     p.canvas = curElement;
+    curElement.dataProcessing = p;    
 
     // Set Processing defaults / environment variables
     p.name = 'Processing.js Instance';
@@ -2915,6 +2927,9 @@
 
     p.exit = function exit() {
       window.clearInterval(looping);
+
+       p.raiseEvent("unload");
+       delete curElement.dataProcessing;
     };
 
 
@@ -7091,6 +7106,32 @@
       }
     };
 
+    p.getFacade = function() { return p; };
+    
+    var events = { "load": [], "unload": []};
+    
+    p.addEventListener = function(type, listener, useCapture) {
+      if(useCapture) { throw "useCapture == true is not supported"; }
+      if(!(type in events)) { throw "unknown event type: " + type; }
+      events[type].push(listener);
+    };
+    
+    p.registerEventType = function(type) { 
+      if(!(type in events)) { events[type] = []; }
+    };
+
+    p.raiseEvent = function(type) {
+      var listeners = events[type];
+      if(listeners && listeners.length > 0) {
+        for(var i=0;i<listeners.length;++i) {
+          if(typeof listeners[i] === 'function') {
+            listeners[i]();
+          } else {
+            listeners[i].run(); // Runnable?
+          }
+        }
+      }
+    };
 
     ////////////////////////////////////////////////////////////////////////////
     // Set up environment
@@ -7384,6 +7425,21 @@
       });
     };
 
+    function tryToBindEvent(name, attrName) {
+      var attrValue = curElement.getAttribute(attrName);      
+      if(!attrValue) return;
+      
+      var attrValue = attrValue.replace(/^\s*javascript\s*:/, "");
+      p.addEventListener(name, function() {
+        var invokeResult = eval(attrValue);
+        if(typeof invokeResult === 'function') invokeResult();
+      }, false);
+    }
+    
+    // bind existing events
+    tryToBindEvent("load", "data-processing-onload");
+    tryToBindEvent("load", "data-processing-onunload");
+    
     return p;
   };
 
