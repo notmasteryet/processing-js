@@ -388,6 +388,7 @@
   Processing.debug = function(e) {};
 
 // Parser starts
+
 function parseProcessing(code) {
   function splitToAtoms(s) {
     var atoms = [], stack = [];
@@ -411,7 +412,11 @@ function parseProcessing(code) {
   function injectStrings(s, strings) {
     return s.replace(/'(\d+)'/g, function(all, index) {
       var val = strings[index];
-      return (/^'((?:[^'\\\n])|(?:\\.[^'\n]*))'$/).test(val) ? "(new Char(" + val + "))" : val;
+      if(val.charAt(0) === "/") {
+        return val;
+      } else {
+        return (/^'((?:[^'\\\n])|(?:\\.[0-9A-Fa-f]*))'$/).test(val) ? "(new Char(" + val + "))" : val;
+      }
     });
   }
 
@@ -439,24 +444,30 @@ function parseProcessing(code) {
   var s = code.replace(/\r\n?|\n\r/g, "\n"); // remove extra CR
   var strings = [];
 
-  // replace strings
-  s = s.replace(/("([^"\\\n]|\\.)*")|('([^'\\\n]|\\.)*')/g, function(all) {
-    var index = strings.length; strings.push(all); return "'" + index + "'";
+  s = s.replace(/("(?:[^"\\\n]|\\.)*")|('(?:[^'\\\n]|\\.)*')|(([\[\(=|&!^:?]\s*)(\/(?![*\/])(?:[^\/\\\n]|\\.)*\/[gim]*)\b)|(\/\/[^\n]*\n)|(\/\*(?:(?!\*\/)(?:.|\n))*\*\/)/g, 
+  function(all, quoted, aposed, regexCtx, prefix, regex, singleComment, comment) {
+    if(quoted !== "" || aposed !== "") { // replace strings
+      var index = strings.length; strings.push(all); 
+      return "'" + index + "'";
+    } else if(regexCtx !== "") { // replace RegExps
+      var index = strings.length; strings.push(regex); 
+      return prefix + "'" + index + "'";
+    } else { // kill comments
+      return comment !== "" ? " " : "\n";
+    }
   });
   
-  // kill comments
-  s = s.replace(/\/\/[^\n]*\n/g, "\n").replace(/\/\*((?!\*\/)(?:.|\n))*\*\//g, " ");
-
   var atoms = splitToAtoms(s);
 
   // function defined below
-  var assembleClassBody, assembleStatementsBlock, assembleStatements, assembleMain;
+  var assembleClassBody, assembleStatementsBlock, assembleStatements, assembleMain, assembleExpression;
 
   var classesRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)(class|interface)\s+([A-Za-z_$][\w$]*\b)(\s+extends\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\b)?(\s+implements\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\b)*)?\s*("A\d+")/g;
-  var methodsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:else|new|return|throw)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)*)?\s*("A\d+"|;)/g;
+  var methodsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:else|new|return|throw|function)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)*)?\s*("A\d+"|;)/g;
   var fieldTest = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:else|new|return|throw)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*(?:"C\d+"\s*)*([=,]|$)/;
   var cstrsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)*)?\s*("A\d+")/g;
   var attrAndTypeRegex = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*/;
+  var functionsRegex = /\bfunction(?:\s+([A-Za-z_$][\w$]*))?\s*("B\d+")\s*("A\d+")/g;
 
   function extractClassesAndMethods(code) {
     var s = code;
@@ -467,6 +478,10 @@ function parseProcessing(code) {
     s = s.replace(methodsRegex, function(all) {
       var index = atoms.length; atoms.push(all);
       return '"D' + index + '"';
+    });
+    s = s.replace(functionsRegex, function(all) {
+      var index = atoms.length; atoms.push(all);
+      return '"H' + index + '"';
     });
     return s;
   }
@@ -509,7 +524,7 @@ function parseProcessing(code) {
       return '"F' + index + '"';
     });
     // function(...) { } --> "H???"
-    s = s.replace(/\bfunction\s*"B\d+"\s*"A\d+"/g, function(all) {
+    s = s.replace(functionsRegex, function(all) {
       var index = atoms.length; atoms.push(all);
       return '"H' + index + '"';
     });    
@@ -573,16 +588,37 @@ function parseProcessing(code) {
   }
 
   function assembleFunction(class_) {
-    // TODO remove function() {} contruct. See inline class instead
-    var m = new RegExp(/"B(\d+)"\s*"A(\d+)"/).exec(class_);
-    return "function" + atoms[m[1]] + " " + assembleStatementsBlock(atoms[m[2]]);
+    var m = new RegExp(/\b([A-Za-z_$][\w$]*)\s*"B(\d+)"\s*"A(\d+)"/).exec(class_);
+    var result = "function";
+    if(m[1] !== "function") { result += " " + m[1]; }
+    result += atoms[m[2]] + " " + assembleStatementsBlock(atoms[m[3]]);
+    return result;
+  }
+  
+  function assembleInlineObject(obj) {
+    var members = obj.split(',');
+    for(var i=0; i < members.length; ++i) {
+      var label = members[i].indexOf(':');
+      if(label < 0) {
+        members[i] = assembleExpression(members[i]);
+      } else {
+        var expr = trimSpaces(members[i].substring(label + 1));
+        members[i] = members[i].substring(0, label + 1) +
+          expr.untrim(assembleExpression(expr.middle));
+      }
+    }
+    return members.join(',');
   }
 
-  var assembleExpression = function(expr) {
+  assembleExpression = function(expr) {
     if(expr.charAt(0) === '(' || expr.charAt(0) === '[') {
       return expr.charAt(0) + assembleExpression(expr.substring(1, expr.length - 1)) + expr.charAt(expr.length - 1);
     } else if(expr.charAt(0) === '{') {
-      return " [" + assembleExpression(expr.substring(1, expr.length - 1)) + "] ";
+      if(/^{\s*(?:[A-Za-z_$][\w$]*)\s*:/.test(expr)) {
+        return " {" + assembleInlineObject(expr.substring(1, expr.length - 1)) + "} ";
+      } else {
+        return " [" + assembleExpression(expr.substring(1, expr.length - 1)) + "] ";
+      }
     } else {
       var trimmed = trimSpaces(expr);
       var s = preExpressionTransform(trimmed.middle);
@@ -680,9 +716,12 @@ function parseProcessing(code) {
     var declarations = body.substring(1, body.length - 1);
     declarations = extractClassesAndMethods(declarations);
     declarations = extractConstructors(declarations, name);
-    var methods = [], classes = [], cstrs = [];
-    declarations = declarations.replace(/"([DEG])(\d+)"/g, function(all, type, index) {
-      if(type === 'D') { methods.push(index); } else if(type === 'E') { classes.push(index); } else { cstrs.push(index); }
+    var methods = [], classes = [], cstrs = [], functions = [];
+    declarations = declarations.replace(/"([DEGH])(\d+)"/g, function(all, type, index) {
+      if(type === 'D') { methods.push(index); } 
+      else if(type === 'E') { classes.push(index); } 
+      else if(type === 'H') { functions.push(index); } 
+      else { cstrs.push(index); }
       return "";
     });
     var fields = declarations.split(';');
@@ -691,12 +730,17 @@ function parseProcessing(code) {
       baseClassName = base.replace(/^\s*extends\s+([A-Za-z_$][\w$]+)\s*$/g, "$1");
       result += "var __self=this;function superMethod(){extendClass(__self,arguments," + baseClassName + ");}\n";
     }
+    for(i = 0; i < functions.length; ++i) {
+      result += assembleFunction(atoms[functions[i]]) + '\n';
+    }
     for(i = 0; i < methods.length; ++i) {
       result += assembleClassMethod(atoms[methods[i]]) + '\n';
     }
     for(i = 0; i < fields.length - 1; ++i) {
       var field = trimSpaces(fields[i]);
-      result += field.untrim(assembleClassField(field.middle)) + ';';
+      if(field.middle.length > 0) {
+        result += field.untrim(assembleClassField(field.middle)) + ';';
+      }
     }
     result += fields[fields.length - 1];
     if(base !== undefined) {
@@ -754,7 +798,7 @@ function parseProcessing(code) {
   }
 
   assembleStatements = function(statements, assembleMethod, assembleClass) {
-    var nextStatement = new RegExp(/\b(catch|for|if|switch|while)\s*"B(\d+)"|\b(do|else|finally|return|throw|try|break|continue)\b|("[ADE](\d+)")|\b((?:case\s[^:]+|[A-Za-z_$][\w$]+\s*):)|(;)/g);
+    var nextStatement = new RegExp(/\b(catch|for|if|switch|while)\s*"B(\d+)"|\b(do|else|finally|return|throw|try|break|continue)\b|("[ADEH](\d+)")|\b((?:case\s[^:]+|[A-Za-z_$][\w$]+\s*):)|(;)/g);
     var res = "";
     statements = preStatementsTransform(statements);
     var lastIndex = 0, m, space;
@@ -775,12 +819,15 @@ function parseProcessing(code) {
         space = statements.substring(lastIndex, nextStatement.lastIndex - m[4].length);
         if(space.trim().length !== 0) { continue; } // avoiding new type[] {} construct
         res += space;
-        if(m[4].charAt(1) === 'D') { 
-          res += assembleMethod(atoms[m[5]]);
-        } else if(m[4].charAt(1) === 'E') { 
-          res += assembleClass(atoms[m[5]]);
+        var kind = m[4].charAt(1), atomIndex = m[5];
+        if(kind === 'D') { 
+          res += assembleMethod(atoms[atomIndex]);
+        } else if(kind === 'E') { 
+          res += assembleClass(atoms[atomIndex]);
+        } else if(kind === 'H') { 
+          res += assembleFunction(atoms[atomIndex]);
         } else {
-          res += assembleStatementsBlock(atoms[m[5]]);
+          res += assembleStatementsBlock(atoms[atomIndex]);
         }
       } else if(m[6] !== undefined) { // label
         space = statements.substring(lastIndex, nextStatement.lastIndex - m[6].length);
@@ -814,6 +861,7 @@ function parseProcessing(code) {
 
   return injectStrings(transformed, strings);
 }
+
 
 // Parser ends
 
