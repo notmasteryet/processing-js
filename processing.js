@@ -70,6 +70,68 @@
     }
   };
 
+  var processingType = /^\s*application\/(?:x-)?processing\s*(?:$|;)/; 
+  function getDOMElement(element) {
+    return typeof element === 'string' ? document.getElementById(element) : element;
+  }
+  function getPjsCode(script) {
+    var element = getDOMElement(script);
+    return element.src ? ajax(element.src) : element.text;
+  }
+  function createCanvas() {
+    var canvas = document.createElement('canvas');
+    canvas.width = 100; canvas.height = 100;
+    return canvas;
+  }
+  function importPjsCode(url) { 
+    var script = document.createElement('script');
+    script.type = "application/processing";
+    script.text = url.substring(0, 4) === 'pjs:' ? url.substring(4) : ajax(url); 
+    return script;
+  }
+  function validateInlineLocation(parent) {
+    if(parent.localName === "head") {
+      throw "Processing inline is prohibited in HEAD tag. Use the inline inside BODY content";
+    }
+  }
+
+  Processing.attachTo = function(canvas, script) { Processing(getDOMElement(canvas), getPjsCode(script)); };
+  Processing.importAndAttachTo = function(canvas, url) { Processing.attachTo(canvas, importPjsCode(url)); };
+  Processing.injectIn = function(element, script) {
+    var parent = getDOMElement(element);
+    var canvas = createCanvas();
+    while(parent.childNodes.length > 0) {
+      var child = parent.firstChild;
+      parent.removeChild(child);
+      canvas.appendChild(child);
+    }
+    parent.appendChild(canvas);
+    Processing(canvas, getPjsCode(script));
+  };  
+  Processing.importAndInjectIn = function(element, url) { Processing.injectIn(element, importPjsCode(url)); };
+  Processing.inline = function(script) {
+    var lastScript = document.lastChild.lastChild; // html's last one
+    if(lastScript.localName === "script") { // script#_firebugCommandLineInjector?
+      lastScript = lastScript.previousSibling;
+      if(lastScript.localName === "div") { // div#_firebugConsole?
+        lastScript = lastScript.previousSibling;
+      }
+    }
+    validateInlineLocation(lastScript);
+    while(lastScript.lastChild.nodeType === 1) {
+      lastScript = lastScript.lastChild;
+    }
+    var parent = lastScript.parentNode;
+    var canvas = createCanvas();
+    if(script instanceof HTMLScriptElement && script.parentNode === null) { 
+      canvas.appendChild(script);
+    }
+    parent.insertBefore(canvas, lastScript);
+
+    Processing(canvas, getPjsCode(script));
+  };
+  Processing.importAndInline = function(url) { Processing.inline(importPjsCode(url)); };
+
   // Automatic Initialization Method
   var init = function() {
     var canvas = document.getElementsByTagName('canvas');
@@ -107,6 +169,50 @@
         Processing(canvas[i], sketchSource);
       }
     }
+
+
+    function initializeScripts() {
+      var scripts = document.getElementsByTagName('script');
+      for (var i = 0, l = scripts.length; i < l; i++) {
+        var script = scripts[i];
+        if (processingType.test(script.type)) {
+          var inline = script.getAttribute('data-inline') !== null;
+          var attachCanvas = script.getAttribute('data-attach');
+          var injectAsContent = script.getAttribute('data-inject');
+
+          if(attachCanvas) {
+            Processing.attachTo(attachCanvas,script);
+          } else if(inline) { 
+            var parent = script.parentNode;
+            validateInlineLocation(parent);
+            var canvas = createCanvas();   
+            parent.replaceChild(canvas, script);
+            canvas.appendChild(script);
+            Processing(canvas, getPjsCode(script));
+          } else if(injectAsContent !== null) {
+            Processing.injectIn(injectAsContent, script);
+          }
+        }
+      }
+    }
+    
+    initializeScripts();
+
+    function initializeObjects() {
+      if(window.navigator && (navigator.mimeTypes['application/x-processing'] || navigator.mimeTypes['application/processing'])) { return; }
+      
+      var objects = document.getElementsByTagName('object');
+      for (var i = 0, l = objects.length; i < l; i++) {
+        var obj = objects[i];
+        if (obj.data && (processingType.test(obj.type) || 
+          (obj.type === "" && obj.data.match(/\.(pde|pjs)$/i)))) {
+          Processing.importAndInjectIn(obj, obj.data);
+          obj.data = ""; 
+        }
+      }
+    }
+
+    initializeObjects();
   };
 
   // Wrapper to easily deal with array names changes.
