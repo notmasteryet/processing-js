@@ -2928,8 +2928,8 @@
     p.exit = function exit() {
       window.clearInterval(looping);
 
-       p.raiseEvent("unload");
-       delete curElement.dataProcessing;
+      p.raiseEvent("unload");
+      delete curElement.dataProcessing;
     };
 
 
@@ -7438,7 +7438,7 @@
     
     // bind existing events
     tryToBindEvent("load", "data-processing-onload");
-    tryToBindEvent("load", "data-processing-onunload");
+    tryToBindEvent("unload", "data-processing-onunload");
     
     return p;
   };
