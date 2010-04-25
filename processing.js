@@ -18,7 +18,7 @@
 
 (function() {
 
-  this.Processing = function Processing(aElement, aCode) {
+  this.Processing = function Processing(aElement, aCode, baseUrl) {
     // Get the DOM element if string was passed
     if (typeof aElement === "string") {
       aElement = document.getElementById(aElement);
@@ -45,7 +45,7 @@
     }
 
     // Build an Processing functions and env. vars into 'p'  
-    var p = Processing.build(aElement);
+    var p = Processing.build(aElement, baseUrl || ".");
 
     // Send aCode Processing syntax to be converted to JavaScript
     if (aCode) {
@@ -69,7 +69,40 @@
       return false;
     }
   };
-
+  
+  function combineUrl(url1, url2) {
+    if(url1 && !/^\w+:\/\//.test(url2)) {
+      var protocolAndHost = "";
+      url1 = url1.replace(/^(\w+:\/\/[^\/]*)($|\/)/, function(all, ph, tl) {
+        protocolAndHost = ph; return "/";
+      });
+      if(!url2 && url2.charAt(0) === '/') {
+        return protocolAndHost + url2;
+      } else {
+        var path1 = url1.split("/"), path2 = url2.split("/"); 
+        path1.pop(); // removing last part of first url
+        path1 = path1.concat(path2);
+        var i = 1;
+        while(i < path1.length) {
+          if(path1[i] === '..') {
+            if(i > 1) { // deapper than root?
+              path1.splice(--i,2); // remove previous part
+            } else {
+              path1.splice(i,1);
+            }
+          } else if(path1[i] === '.') {
+              path1.splice(i,1);
+          } else {
+            ++i;
+          }
+        }
+        return protocolAndHost + path1.join("/");
+      }
+    } else {
+      return url2;
+    }
+  }
+  
   // Automatic Initialization Method
   var init = function() {
     var canvas = document.getElementsByTagName('canvas');
@@ -91,13 +124,16 @@
         // scene incorrectly. To fix this, we need to adjust the attributes
         // of the canvas width and height.
         // Get the source, we'll need to find what the user has used in size()
-        var filenames = processingSources.split(' ');
+        var filenames = processingSources.trim().split(' ');
         var code = "";
         for (var j=0, fl=filenames.length; j<fl; j++) {
           if (filenames[j]) {
             code += ajax(filenames[j]) + ";\n"; // deal with files that don't end with newline
           }
         }
+        // first file will be a base for URLs
+        var baseUrl = combineUrl(document.location.href, filenames[0]);
+        
         // get the dimensions
         // this regex needs to be cleaned up a bit
         var r = "" + code.match(/size\s*\((?:.+),(?:.+),\s*(OPENGL|P3D)\s*\)\s*;/);
@@ -113,7 +149,7 @@
             canvas[i].setAttribute("height", sketchHeight);
           }
         }
-        Processing(canvas[i], code);
+        Processing(canvas[i], code, baseUrl);
       }
     }
   };
@@ -425,28 +461,7 @@
         if (pair && pair.length === 2) {
           var key = clean(pair[0]);
           var value = clean(pair[1]);
-
-          // A few directives require work beyond storying key/value pairings
-          if (key === "preload") {
-            var list = value.split(',');
-            // All pre-loaded images will get put in imageCache, keyed on filename
-            for (var j = 0, ll = list.length; j < ll; j++) {
-              var imageName = clean(list[j]);
-              var img = new Image();
-              img.onload = (function() {
-                return function() {
-                  p.pjs.imageCache.pending--;
-                };
-              }());
-              p.pjs.imageCache.pending++;
-              p.pjs.imageCache[imageName] = img;
-              img.src = imageName;
-            }
-          } else if (key === "opaque") {
-            p.canvas.mozOpaque = value === "true";
-          } else {
-            p.pjs[key] = value;
-          }
+          p.pjs[key] = value;
         }
       }
       aCode = aCode.replace(dm[0], '');
@@ -820,12 +835,13 @@
   }
 
   // Attach Processing functions to 'p'
-  Processing.build = function buildProcessing(curElement) {
+  Processing.build = function buildProcessing(curElement, baseUrl) {
     // Create the 'p' object
     var p = {};
     var curContext;
     p.use3DContext = false; // default '2d' canvas context
     p.canvas = curElement;
+    p.baseUrl = baseUrl;
 
     // Set Processing defaults / environment variables
     p.name = 'Processing.js Instance';
@@ -3641,11 +3657,11 @@
 
     // Load a file or URL into strings     
     p.loadStrings = function loadStrings(url) {
-      return ajax(url).split("\n");
+      return ajax(combineUrl(p.baseUrl, url)).split("\n");
     };
 
     p.loadBytes = function loadBytes(url) {
-      var string = ajax(url);
+      var string = ajax(combineUrl(p.baseUrl, url));
       var ret = new Array(string.length);
 
       for (var i = 0; i < string.length; i++) {
@@ -6257,7 +6273,7 @@
           };
         }(img, pimg, callback));
 
-        img.src = file; // needs to be called after the img.onload function is declared or it wont work in opera
+        img.src = combineUrl(p.baseUrl, file); // needs to be called after the img.onload function is declared or it wont work in opera
         return pimg;
       }
     };
@@ -7392,6 +7408,36 @@
       if (code) {
         var parsedCode = Processing.parse(code, p);
 
+        // A processing PJS directives 
+        if("base" in p.pjs) {
+          p.baseUrl = p.pjs.base;
+        } else if("useDataFolder" in p.pjs) {
+          if(p.pjs.useDataFolder === "true") { 
+            // rebase to data folder
+            p.baseUrl = combineUrl(p.baseUrl, "data/");
+          }
+        }
+        if ("preload" in p.pjs) {
+          var list = p.pjs.preload.split(/\s*,\s*/);
+          // All pre-loaded images will get put in imageCache, keyed on filename
+          for (var j = 0, ll = list.length; j < ll; j++) {
+            var imageName = list[j];
+            var img = new Image();
+            img.onload = (function() {
+              return function() {
+                p.pjs.imageCache.pending--;
+              };
+            }());
+            p.pjs.imageCache.pending++;
+            p.pjs.imageCache[imageName] = img;
+            img.src = combineUrl(p.baseUrl, imageName);
+          }
+          delete p.pjs.preload;
+        } 
+        if ("opaque" in p.pjs) {
+          curElement.mozOpaque = p.pjs.opaque === "true";
+        }        
+
         if (!p.use3DContext) {
           // Setup default 2d canvas context. 
           curContext = curElement.getContext('2d');
@@ -7410,7 +7456,7 @@
           p.noSmooth();
           p.disableContextMenu();
         }
-
+        
         // Step through the libraries that were attached at doc load...
         for (var i in Processing.lib) {
           if (Processing.lib) {
