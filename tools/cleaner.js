@@ -5,3 +5,12 @@ function __unescape_string() {
                           replace(/@NEWLINE@/g, '\n').
                           replace(/@BACKSLASH@/g, '\\');
 }
+
+function __unescape_compiled_string() {
+  if(typeof(__escaped_compiled_string) === 'undefined') return undefined;
+  
+  return __escaped_compiled_string.replace(/@DQUOTE@/g, '"').
+                          replace(/@SQUOTE@/g, "'").
+                          replace(/@NEWLINE@/g, '\n').
+                          replace(/@BACKSLASH@/g, '\\');
+}

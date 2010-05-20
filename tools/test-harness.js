@@ -91,10 +91,28 @@ function _checkThrows(f) {
   }
 }
 
+function _normalizeSpaces(s) {
+  var result = s.replace(/\s+/gm, function(all) {
+    return all.indexOf('\n') < 0 ? " " : "\n";
+  });
+  return result.trim();
+}
+
 // Parser tests are automatically generated from Processing files to call this.
 function _checkParser() {
-  eval(Processing(canvas, parserTest.body));
-  _pass();
+  if(parserTest.compiled === undefined) {
+    eval(Processing(canvas, parserTest.body));
+    _pass();
+  } else {
+    var dummyP = { pjs: {
+      imageCache: {
+        pending: 0
+      }
+    }};
+    var expected = parserTest.compiled;
+    var result = Processing.parse(parserTest.body, dummyP);
+    _checkEqual(_normalizeSpaces(expected), _normalizeSpaces(result))
+  }
 }
 
 function _doSetup() {

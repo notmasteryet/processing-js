@@ -68,10 +68,14 @@ class ProcessingTests(object):
               fullpath = os.path.abspath(os.path.join(root, filename))
               if testPattern and self.shouldSkipTest(testPattern, fullpath):
                 continue
+              compiledpath = fullpath + '.compiled'
 
               if filename.endswith('.pde'):
-                  tmpFile = jsshellhelper.createEscapedFile(fullpath)
-                  one_test = 'var parserTest = {name:"' + fullpath + '", body: __unescape_string()};\n'
+                  if os.path.exists(compiledpath):
+                    tmpFile = jsshellhelper.createEscapedFileWithCompiled(fullpath, compiledpath)
+                  else:
+                    tmpFile = jsshellhelper.createEscapedFile(fullpath)
+                  one_test = 'var parserTest = {name:"' + fullpath + '", body: __unescape_string(), compiled: __unescape_compiled_string() };\n'
 
                   testCmd = [jsshell,
                              '-f', os.path.join(self.toolsdir, 'fake-dom.js'),
