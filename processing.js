@@ -431,26 +431,28 @@ function parseProcessing(code) {
     result.untrim = function(t) { return this.left + t + this.right; };  
     return result;
   }
-
-  function assembleAtoms(atoms, index) {
-    var s = atoms[index];
-    return s.replace(/"[A-Z](\d+)"/g, function(all, i) {
-      return assembleAtoms(atoms, i);
-    });
+  
+  function collapseToString(array) {
+    var s = "";
+    for(var i=0,l=array.length;i<l;++i) {
+      s += array[i].toString();
+    }
+    return s;
   }
-
+  
   function getAtomIndex(templ) { return templ.substring(2, templ.length - 1); }
 
   var s = code.replace(/\r\n?|\n\r/g, "\n"); // remove extra CR
   var strings = [];
 
-  s = s.replace(/("(?:[^"\\\n]|\\.)*")|('(?:[^'\\\n]|\\.)*')|(([\[\(=|&!^:?]\s*)(\/(?![*\/])(?:[^\/\\\n]|\\.)*\/[gim]*)\b)|(\/\/[^\n]*\n)|(\/\*(?:(?!\*\/)(?:.|\n))*\*\/)/g, 
+  s = s.replace(/("(?:[^"\\\n]|\\.)*")|('(?:[^'\\\n]|\\.)*')|(([\[\(=|&!\^:?]\s*)(\/(?![*\/])(?:[^\/\\\n]|\\.)*\/[gim]*)\b)|(\/\/[^\n]*\n)|(\/\*(?:(?!\*\/)(?:.|\n))*\*\/)/g, 
   function(all, quoted, aposed, regexCtx, prefix, regex, singleComment, comment) {
+    var index;
     if(quoted !== "" || aposed !== "") { // replace strings
-      var index = strings.length; strings.push(all); 
+      index = strings.length; strings.push(all); 
       return "'" + index + "'";
     } else if(regexCtx !== "") { // replace RegExps
-      var index = strings.length; strings.push(regex); 
+      index = strings.length; strings.push(regex); 
       return prefix + "'" + index + "'";
     } else { // kill comments
       return comment !== "" ? " " : "\n";
@@ -459,8 +461,14 @@ function parseProcessing(code) {
   
   var atoms = splitToAtoms(s);
 
+  function addAtom(s, type) { 
+    var lastIndex = atoms.length; 
+    atoms.push(s);
+    return '"' + type + lastIndex + '"';
+  }
+
   // function defined below
-  var assembleClassBody, assembleStatementsBlock, assembleStatements, assembleMain, assembleExpression;
+  var transformClassBody, transformStatementsBlock, transformStatements, transformMain, transformExpression;
 
   var classesRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)(class|interface)\s+([A-Za-z_$][\w$]*\b)(\s+extends\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\b)?(\s+implements\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\b)*)?\s*("A\d+")/g;
   var methodsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:else|new|return|throw|function)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)*)?\s*("A\d+"|;)/g;
@@ -472,16 +480,13 @@ function parseProcessing(code) {
   function extractClassesAndMethods(code) {
     var s = code;
     s = s.replace(classesRegex, function(all) {
-      var index = atoms.length; atoms.push(all);      
-      return '"E' + index + '"';
+      return addAtom(all, 'E');
     });
     s = s.replace(methodsRegex, function(all) {
-      var index = atoms.length; atoms.push(all);
-      return '"D' + index + '"';
+      return addAtom(all, 'D');
     });
     s = s.replace(functionsRegex, function(all) {
-      var index = atoms.length; atoms.push(all);
-      return '"H' + index + '"';
+      return addAtom(all, 'H');
     });
     return s;
   }
@@ -492,24 +497,40 @@ function parseProcessing(code) {
       if(name !== className) {
         return all;
       } else {
-        var index = atoms.length; atoms.push(all);      
-        return '"G' + index + '"';
+        return addAtom(all, 'G');
       }
     });
     return s;
   }
 
-  function assembleParams(params) {
+  function transformParams(params) {
     var paramsWoPars = params.substring(1, params.length - 1).trim();
-    if(paramsWoPars === "") { return "()"; }
-
     var result = [];
-    var paramList = paramsWoPars.split(",");
-    for(var i=0; i < paramList.length; ++i) {
-      var param = /\b([A-Za-z_$][\w$]*\b)\s*$/.exec(paramList[i]);
-      result.push(param[1]);
+    if(paramsWoPars !== "") { 
+      var paramList = paramsWoPars.split(",");
+      for(var i=0; i < paramList.length; ++i) {
+        var param = /\b([A-Za-z_$][\w$]*\b)\s*$/.exec(paramList[i]);
+        result.push({
+          type:'param',
+          name:param[1],
+          toString: function() { return this.name; }
+        });
+      }
     }
-    return "(" + result.join(", ") + ")";
+    return {
+      type: 'params',
+      params: result,
+      toString: function() {
+        if(this.params.length === 0) { 
+          return "()";
+        }
+        var s = "(";
+        for(var i=0,l=this.params.length;i<l;++i) {
+          s += this.params[i] + ", ";
+        }
+        return s.substring(0, s.length - 2) + ")";
+      }
+    };
   }
 
   function preExpressionTransform(expr) {
@@ -520,22 +541,19 @@ function parseProcessing(code) {
     });
     // new Runnable() {...} --> "F???"
     s = s.replace(/\bnew\s+([A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)(?:\s*"B\d+")\s*("A\d+")/g, function(all, type, init) {
-      var index = atoms.length; atoms.push(all);
-      return '"F' + index + '"';
+      return addAtom(all, 'F');
     });
     // function(...) { } --> "H???"
     s = s.replace(functionsRegex, function(all) {
-      var index = atoms.length; atoms.push(all);
-      return '"H' + index + '"';
+      return addAtom(all, 'H');
     });    
     // new type[?] --> new ArrayList(?)
     s = s.replace(/\bnew\s+([A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)\s*("C\d+"(?:\s*"C\d+")*)/g, function(all, type, index) {
       var args = index.replace(/"C(\d+)"/g, function(all, j) { return atoms[j]; }).
         replace(/\[\s*\]/g, "[0]").replace(/\s*\]\s*\[\s*/g, ", ");
       
-      var newIndex = atoms.length;
-      atoms.push("(" + args.substring(1, args.length - 1) + ")");      
-      return 'new ArrayList"B' + newIndex + '"';
+      var arrayInitializer = "(" + args.substring(1, args.length - 1) + ")";
+      return 'new ArrayList' + addAtom(arrayInitializer, 'B');
     });
     // .length() --> .length
     s = s.replace(/(\.\s*length)\s*"B\d+"/g, "$1");
@@ -564,7 +582,7 @@ function parseProcessing(code) {
     // super() -> superMethod();
     s = s.replace(/\bsuper(\s*"B\d+")/g, "superMethod$1");
     // 3.0f -> 3.0
-    s = s.replace(/\b(\.?\d+)f/g, "$1");
+    s = s.replace(/\b(\.?\d+)[fF]/g, "$1");
     // Weird (?) parsing errors with %
     s = s.replace(/([^\s])%([^=\s])/g, "$1 % $2");
     // Since frameRate() and frameRate are different things,
@@ -576,76 +594,135 @@ function parseProcessing(code) {
     return s;
   }
 
-  function assembleInlineClass(class_) {
+  function transformInlineClass(class_) {
     var m = new RegExp(/\bnew\s*(Runnable)\s*"B\d+"\s*"A(\d+)"/).exec(class_);
     if(m === null) {
       return "undefined";
     } else {
       // only Runnable supported
-      return "new (function() { with(this) {\n" +
-        assembleClassBody(atoms[m[2]], m[1]) + "}})";
+      return {
+        type: 'inline-class',
+        baseInterfaceName: "Runnable",
+        body: transformClassBody(atoms[m[2]], m[1]),
+        toString: function() {
+          return "new (function() { with(this) {\n" + this.body + "}})";
+        }
+      };
     }
   }
 
-  function assembleFunction(class_) {
+  function transformFunction(class_) {
     var m = new RegExp(/\b([A-Za-z_$][\w$]*)\s*"B(\d+)"\s*"A(\d+)"/).exec(class_);
-    var result = "function";
-    if(m[1] !== "function") { result += " " + m[1]; }
-    result += atoms[m[2]] + " " + assembleStatementsBlock(atoms[m[3]]);
-    return result;
+    return {
+      type: 'function',
+      name: (m[1] !== "function" ? m[1] : undefined),
+      params: atoms[m[2]],
+      body: transformStatementsBlock(atoms[m[3]]),
+      toString: function() {
+        var result = "function";
+        if(this.name) {
+          result += " " + this.name;
+        }
+        return result + this.params + " " + this.body;
+      }
+    };
   }
   
-  function assembleInlineObject(obj) {
+  function transformInlineObject(obj) {
     var members = obj.split(',');
     for(var i=0; i < members.length; ++i) {
       var label = members[i].indexOf(':');
       if(label < 0) {
-        members[i] = assembleExpression(members[i]);
+        members[i] = { value: transformExpression(members[i]) };
       } else {
-        var expr = trimSpaces(members[i].substring(label + 1));
-        members[i] = members[i].substring(0, label + 1) +
-          expr.untrim(assembleExpression(expr.middle));
+        members[i] = { label: members[i].substring(0, label).trim(),
+          value: transformExpression(members[i].substring(label + 1).trim()) };
       }
     }
-    return members.join(',');
+    return {
+      type: 'inline-object',
+      members: members,
+      toString: function() {
+        var s = "";
+        for(var i=0,l=this.members.length;i<l;++i) {
+          if(this.members[i].label) { 
+            s += this.members[i].label + ": ";
+          }
+          s += this.members[i].value.toString() + ", ";
+        }
+        return s.substring(0, s.length - 2);
+      }
+    };      
   }
 
-  assembleExpression = function(expr) {
+  function expandExpression(expr) {
     if(expr.charAt(0) === '(' || expr.charAt(0) === '[') {
-      return expr.charAt(0) + assembleExpression(expr.substring(1, expr.length - 1)) + expr.charAt(expr.length - 1);
+      return expr.charAt(0) + expandExpression(expr.substring(1, expr.length - 1)) + expr.charAt(expr.length - 1);
     } else if(expr.charAt(0) === '{') {
-      if(/^{\s*(?:[A-Za-z_$][\w$]*)\s*:/.test(expr)) {
-        return " {" + assembleInlineObject(expr.substring(1, expr.length - 1)) + "} ";
+      if(/^\{\s*(?:[A-Za-z_$][\w$]*|'\d+')\s*:/.test(expr)) {
+        return "{" + addAtom(expr.substring(1, expr.length - 1), 'I') + "}";
       } else {
-        return " [" + assembleExpression(expr.substring(1, expr.length - 1)) + "] ";
+        return "[" + expandExpression(expr.substring(1, expr.length - 1)) + "]";
       }
-    } else {
+    } else {    
       var trimmed = trimSpaces(expr);
       var s = preExpressionTransform(trimmed.middle);
       s = s.replace(/"[ABC](\d+)"/g, function(all, index) {
-        return assembleExpression(atoms[index]);
-      });
-      s = s.replace(/"H(\d+)"/g, function(all, index) {
-        return assembleFunction(atoms[index]);
-      });
-      s = s.replace(/"F(\d+)"/g, function(all, index) {
-        return assembleInlineClass(atoms[index]);
+        return expandExpression(atoms[index]);
       });
       return trimmed.untrim( s );
     }
+  }
+  
+  transformExpression = function(expr) {
+    var transforms = [];
+    var s = expandExpression(expr);
+    s = s.replace(/"H(\d+)"/g, function(all, index) {
+      transforms.push(transformFunction(atoms[index]));
+      return '"!' + (transforms.length - 1) + '"';
+    });
+    s = s.replace(/"F(\d+)"/g, function(all, index) {
+      transforms.push(transformInlineClass(atoms[index]));
+      return '"!' + (transforms.length - 1) + '"';
+    });
+    s = s.replace(/"I(\d+)"/g, function(all, index) {
+      transforms.push(transformInlineObject(atoms[index]));
+      return '"!' + (transforms.length - 1) + '"';
+    });
+
+    return {
+      type: 'expression',
+      expr: s,
+      transforms: transforms,
+      toString: function() {
+        return this.expr.replace(/"!(\d+)"/g, function(all, index) {
+          return transforms[index].toString();
+        });
+      }
+    };
   };
 
-  function assembleVarDefinition(def, defaultTypeValue) {
+  function transformVarDefinition(def, defaultTypeValue) {
     var eqIndex = def.indexOf("=");
-    var name, value;
+    var name, value, isDefault;
     if(eqIndex < 0) { 
       name = def;
-      value = " = " + defaultTypeValue; 
+      value = defaultTypeValue; 
+      isDefault = true;
     } else {
-      name = def.substring(0, eqIndex + 1);
-      value =  assembleExpression(def.substring(eqIndex + 1));
+      name = def.substring(0, eqIndex);
+      value = transformExpression(def.substring(eqIndex + 1));
+      isDefault = false;
     }        
-    return name.replace(/(\s*"C\d+")+/g, "") + value;
+    return {
+      type: 'var-def',
+      name: name.replace(/(\s*"C\d+")+/g, "").trim(),
+      isDefault: isDefault,
+      value: value,
+      toString: function() {
+        return this.name + ' = ' + this.value;
+      }
+    };
   }
   
   function getDefaultValueForType(type) {
@@ -660,59 +737,95 @@ function parseProcessing(code) {
       }
   }
 
-  function assembleStatement(statement) {
+  function transformStatement(statement) {
     if(fieldTest.test(statement)) {
       var attrAndType = attrAndTypeRegex.exec(statement);
       var definitions = statement.substring(attrAndType[0].length).split(",");
       var defaultTypeValue = getDefaultValueForType(attrAndType[2]);
       for(var i=0; i < definitions.length; ++i) {
-        definitions[i] = assembleVarDefinition(definitions[i], defaultTypeValue);
+        definitions[i] = transformVarDefinition(definitions[i], defaultTypeValue);
       }
-      return "var " + definitions.join(",");
+      return {
+        type: "var",
+        definitions: definitions,
+        varType: attrAndType[2],
+        toString: function() {
+          return "var " + this.definitions.join(",");
+        }
+      };
     } else {
-      return assembleExpression(statement);
+      return {
+        type: 'statement',
+        expression: transformExpression(statement),
+        toString: function() { return this.expression.toString(); }
+      };
     }
   }
 
-  function assembleForExpression(expr) {
+  function transformForExpression(expr) {
     var content = expr.substring(1, expr.length - 1).split(";");
-    return "(" + assembleStatement(content[0]) + "; " +
-      assembleExpression(content[1]) + "; " + assembleExpression(content[2]) + ")";
+    return {
+      type: 'for-arg',
+      initStatement: transformStatement(content[0]),
+      condition: transformExpression(content[1]),
+      step: transformExpression(content[2]),
+      toString: function() {
+        return "(" + this.initStatement + "; " + this.condition + "; " + this.step + ")";
+      }
+    };
   }
 
-  function assembleInnerClass(class_) {
+  function transformInnerClass(class_) {
     var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
     classesRegex.lastIndex = 0;
     var body = atoms[getAtomIndex(m[6])];
     if(m[2] === "interface") {
-      return "this." + m[3] + " = function " + m[3] + "() { throw 'This is an interface'; };";     
+      return {
+        type: 'interface',
+        name: m[3],
+        toString: function() {
+          return  "this." + this.name + " = function " + this.name + "() { "+
+            "throw 'This is an interface'; };";
+        }
+      };
     } else {
-      var result = "this." + m[3] + " = function " + m[3] + "() { with(this) {\n";     
-      result += assembleClassBody(body, m[3], m[4], m[5]);
-      result += "}};";
-      return result;
+      return {
+        type: 'class',
+        body: transformClassBody(body, m[3], m[4], m[5]),
+        toString: function() {
+          return "this." + m[3] + " = function " + m[3] + "() { with(this) {\n" +
+            transformClassBody(body, m[3], m[4], m[5]) + "}};";        
+        }
+      };
     }
   }
 
-  function assembleClassMethod(method) {
+  function transformClassMethod(method) {
     var m = methodsRegex.exec(method);
     methodsRegex.lastIndex = 0;
-    var result = "addMethod(this, '" + m[3] + "', function " + assembleParams(atoms[getAtomIndex(m[4])]) + " " +
-       assembleStatementsBlock(atoms[getAtomIndex(m[6])]) +");";
-    return result;
+    return {
+      type: 'method',
+      name: m[3],
+      params: transformParams(atoms[getAtomIndex(m[4])]),
+      body: transformStatementsBlock(atoms[getAtomIndex(m[6])]),
+      toString: function(){
+        return "addMethod(this, '" + this.name + "', function " + this.params + " " +
+          this.body +");";
+      }
+    };
   }
 
-  function assembleClassField(statement) {
+  function transformClassField(statement) {
     var attrAndType = attrAndTypeRegex.exec(statement);
     var definitions = statement.substring(attrAndType[0].length).split(/,\s*/g);
     var defaultTypeValue = getDefaultValueForType(attrAndType[2]);
     for(var i=0; i < definitions.length; ++i) {
-      definitions[i] = assembleVarDefinition(definitions[i], defaultTypeValue);
+      definitions[i] = transformVarDefinition(definitions[i], defaultTypeValue);
     }
     return "this." + definitions.join("; this.");
   }
 
-  assembleClassBody = function(body, name, base, impls) {
+  transformClassBody = function(body, name, base, impls) {
     var declarations = body.substring(1, body.length - 1);
     declarations = extractClassesAndMethods(declarations);
     declarations = extractConstructors(declarations, name);
@@ -725,70 +838,115 @@ function parseProcessing(code) {
       return "";
     });
     var fields = declarations.split(';');
-    var i, result = "", baseClassName;
+    var i, baseClassName;
+    var result = { type:'class', functions: [], methods: [], fields: [], cstrs: [], inner: [] };
     if(base !== undefined) {
       baseClassName = base.replace(/^\s*extends\s+([A-Za-z_$][\w$]+)\s*$/g, "$1");
-      result += "var __self=this;function superMethod(){extendClass(__self,arguments," + baseClassName + ");}\n";
+      result.baseClassName = baseClassName;
     }
     for(i = 0; i < functions.length; ++i) {
-      result += assembleFunction(atoms[functions[i]]) + '\n';
+      result.functions.push(transformFunction(atoms[functions[i]]));
     }
     for(i = 0; i < methods.length; ++i) {
-      result += assembleClassMethod(atoms[methods[i]]) + '\n';
+      result.methods.push(transformClassMethod(atoms[methods[i]]));
     }
     for(i = 0; i < fields.length - 1; ++i) {
       var field = trimSpaces(fields[i]);
-      if(field.middle.length > 0) {
-        result += field.untrim(assembleClassField(field.middle)) + ';';
-      }
+      result.fields.push(transformClassField(field.middle));
     }
-    result += fields[fields.length - 1];
-    if(base !== undefined) {
-      result += "extendClass(__self,arguments);\n";
-    }
-    var cstrIfs = [];
+    var tail = fields[fields.length - 1];
+    
     for(i = 0; i < cstrs.length; ++i) {
       var m = new RegExp(/"B(\d+)"\s+"A(\d+)"/).exec(atoms[cstrs[i]]);
-      var params = assembleParams(atoms[m[1]]);
-      var paramNames = params.substring(1, params.length - 1).split(", ");
-      if(paramNames.length === 1 && paramNames[0] === '') { paramNames = []; }
-      
+      var params = transformParams(atoms[m[1]]);
+
       var cstrBody = atoms[m[2]];
       cstrBody = cstrBody.substring(1, cstrBody.length - 1);
       
-      var prefix = "if(arguments.length === " + paramNames.length + ") {\n";
-      for(var j = 0; j < paramNames.length; ++j) {
-        prefix += "  var " + paramNames[j] + " = arguments[" + j + "];\n";
+      result.cstrs.push({
+        type: 'constructor',
+        params: params,
+        statements: transformStatements(cstrBody),
+        toString: function() {
+          var params = this.params.toString();
+          var paramNames = params.substring(1, params.length - 1).split(", ");
+          if(paramNames.length === 1 && paramNames[0] === '') { paramNames = []; }
+
+          var prefix = "if(arguments.length === " + paramNames.length + ") {\n";
+          for(var j = 0; j < paramNames.length; ++j) {
+            prefix += "  var " + paramNames[j] + " = arguments[" + j + "];\n";
+          }
+
+          return prefix + collapseToString(this.statements) + '}\n';      
+        }
+      });        
+    }
+
+    for(i = 0; i < classes.length; ++i) {
+     result.inner.push(transformInnerClass(atoms[classes[i]]));
+    }
+    
+    result.toString = function() {
+      var s = "";
+      if(base !== undefined) {
+        s += "var __self=this;function superMethod(){extendClass(__self,arguments," + 
+          this.baseClassName + ");}\n";
+      }
+      s += this.functions.join('\n');
+      s += this.methods.join('\n');
+      s += this.fields.join(";\n") + ";\n";
+
+      if(base !== undefined) {
+        s += "extendClass(__self,arguments);\n";
       }
 
-      cstrIfs.push(prefix + assembleStatements(cstrBody) + '}\n');
-    }
-    result += cstrIfs.join(" else ");
-    for(i = 0; i < classes.length; ++i) {
-      result += assembleInnerClass(atoms[classes[i]]) + '\n';
-    }
+      s += this.cstrs.join(" else ");
+      s += this.inner.join('\n');
+      s += tail;
+      return s;
+    };
     return result;
   };
 
-  function assembleGlobalClass(class_) {
+  function transformGlobalClass(class_) {
     var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
     classesRegex.lastIndex = 0;
     var body = atoms[getAtomIndex(m[6])];
     if(m[2] === "interface") {
-      return "processing." + m[3] + " = function " + m[3] + "() { throw 'This is an interface'; };";     
+      return {
+        type: 'interface',
+        name: m[3],
+        toString: function() {
+          return  "processing." + this.name + " = function " + this.name + "() { "+
+            "throw 'This is an interface'; };";
+        }
+      };
     } else {
-      var result = "processing." + m[3] + " = function " + m[3] + "() { with(this) {\n" +
-        assembleClassBody(body, m[3], m[4], m[5]) + "}};";
-      return result;
+      return {
+        type: 'class',
+        body: transformClassBody(body, m[3], m[4], m[5]),
+        toString: function() {
+          return "processing." + m[3] + " = function " + m[3] + "() { with(this) {\n" +
+            transformClassBody(body, m[3], m[4], m[5]) + "}};";        
+        }
+      };
     }
   }
 
-  function assembleGlobalMethod(method) {
+  function transformGlobalMethod(method) {
     var m = methodsRegex.exec(method);
-    var result = "processing." + m[3] + " = function " + m[3] + assembleParams(atoms[getAtomIndex(m[4])]) + " " +
-       assembleStatementsBlock(atoms[getAtomIndex(m[6])]) +";";
+    var result = 
     methodsRegex.lastIndex = 0;
-    return result;
+    return {
+      type: 'method',
+      name: m[3],
+      params: transformParams(atoms[getAtomIndex(m[4])]),
+      body: transformStatementsBlock(atoms[getAtomIndex(m[6])]),
+      toString: function() { 
+        return "processing." + this.name + " = function " + this.name + this.params + " " +
+          this.body + ";";
+      }
+    };
   }
   
   function preStatementsTransform(statements) {
@@ -797,71 +955,106 @@ function parseProcessing(code) {
     return s;
   }
 
-  assembleStatements = function(statements, assembleMethod, assembleClass) {
-    var nextStatement = new RegExp(/\b(catch|for|if|switch|while)\s*"B(\d+)"|\b(do|else|finally|return|throw|try|break|continue)\b|("[ADEH](\d+)")|\b((?:case\s[^:]+|[A-Za-z_$][\w$]+\s*):)|(;)/g);
-    var res = "";
+  transformStatements = function(statements, transformMethod, transformClass) {
+    var nextStatement = new RegExp(/\b(catch|for|if|switch|while|with)\s*"B(\d+)"|\b(do|else|finally|return|throw|try|break|continue)\b|("[ADEH](\d+)")|\b((?:case\s[^:]+|[A-Za-z_$][\w$]+\s*):)|(;)/g);
+    var res = [];
     statements = preStatementsTransform(statements);
     var lastIndex = 0, m, space;
     while((m = nextStatement.exec(statements)) !== null) {
       if(m[1] !== undefined) { // catch, for ...
         var i = statements.lastIndexOf('"B', nextStatement.lastIndex);
-        res += statements.substring(lastIndex, i);
+        var statementsPrefix = statements.substring(lastIndex, i);
         if(m[1] === "for") {
-          res += assembleForExpression(atoms[m[2]]);
+          res.push({ 
+            type: m[1], 
+            argument: transformForExpression(atoms[m[2]]), 
+            prefix: statementsPrefix,
+            toString: function() { return this.prefix + this.argument; }
+          });
         } else if(m[1] === "catch") {
-          res += assembleParams(atoms[m[2]]);
+          res.push({ 
+            type: m[1], 
+            argument: transformParams(atoms[m[2]]), 
+            prefix: statementsPrefix,
+            toString: function() { return this.prefix + this.argument; }
+          });
         } else {
-          res += assembleExpression(atoms[m[2]]);
+          res.push({ 
+            type: m[1], 
+            argument: transformExpression(atoms[m[2]]), 
+            prefix: statementsPrefix,
+            toString: function() { return this.prefix + this.argument; }
+          });
         }
       } else if(m[3] !== undefined) { // do, else, ...
-        res += statements.substring(lastIndex, nextStatement.lastIndex);
+          res.push({ 
+            type: m[3], 
+            prefix: statements.substring(lastIndex, nextStatement.lastIndex),
+            toString: function() { return this.prefix; }
+          });
       } else if(m[4] !== undefined) { // block, class and methods
         space = statements.substring(lastIndex, nextStatement.lastIndex - m[4].length);
         if(space.trim().length !== 0) { continue; } // avoiding new type[] {} construct
-        res += space;
+        res.push(space);
         var kind = m[4].charAt(1), atomIndex = m[5];
         if(kind === 'D') { 
-          res += assembleMethod(atoms[atomIndex]);
+          res.push(transformMethod(atoms[atomIndex]));
         } else if(kind === 'E') { 
-          res += assembleClass(atoms[atomIndex]);
+          res.push(transformClass(atoms[atomIndex]));
         } else if(kind === 'H') { 
-          res += assembleFunction(atoms[atomIndex]);
+          res.push(transformFunction(atoms[atomIndex]));
         } else {
-          res += assembleStatementsBlock(atoms[atomIndex]);
+          res.push(transformStatementsBlock(atoms[atomIndex]));
         }
       } else if(m[6] !== undefined) { // label
         space = statements.substring(lastIndex, nextStatement.lastIndex - m[6].length);
-        if(space.trim().length !== 0) { continue; } // avoiding ?: construct
-        res += statements.substring(lastIndex, nextStatement.lastIndex);
+        if(space.trim().length !== 0) { continue; } // avoiding ?: construct        
+        res.push({
+          type: "label",
+          label: statements.substring(lastIndex, nextStatement.lastIndex),
+          toString: function() { return this.label; }
+        });
       } else { // semicolon
         var statement = trimSpaces(statements.substring(lastIndex, nextStatement.lastIndex - 1));
-        res += statement.untrim(assembleStatement(statement.middle)) + ";";
+        res.push(statement.left);
+        res.push(transformStatement(statement.middle));
+        res.push(statement.right + ";");
       }
       lastIndex = nextStatement.lastIndex;
     }    
-    res += statements.substring(lastIndex);
+    res.push(statements.substring(lastIndex));
     return res;
   };
 
-  assembleStatementsBlock = function(block) {
+  transformStatementsBlock = function(block) {
     var content = trimSpaces(block.substring(1, block.length - 1));
-    var statements = content.middle;
-    return "{" + content.untrim(assembleStatements(statements)) + "}";
+    var statements = transformStatements(content.middle);
+    return { 
+      type: "block",
+      statements: statements,
+      toString: function() { 
+        return "{\n" + collapseToString(this.statements) + "\n}"; 
+      }
+    };
   };
 
-  assembleMain = function() {     
+  transformMain = function() {     
     var statements = extractClassesAndMethods(atoms[0]);
     statements = statements.replace(/\bimport\s+[^;]+;/g, "");
-    return assembleStatements(statements, assembleGlobalMethod, assembleGlobalClass);
-  };
+    return { 
+      type: "global", 
+      statements: transformStatements(statements, transformGlobalMethod, transformGlobalClass),
+      toString: function() { return collapseToString(this.statements); }
+    };
+  };    
 
-  var transformed = assembleMain();
+  var transformed = transformMain().toString();
+  
   // remove empty extra lines with space
   transformed = transformed.replace(/\s*\n(?:[\t ]*\n)+/g, "\n\n");
 
   return injectStrings(transformed, strings);
 }
-
 
 // Parser ends
 
