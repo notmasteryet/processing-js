@@ -432,14 +432,6 @@ function parseProcessing(code) {
     return result;
   }
   
-  function collapseToString(array) {
-    var s = "";
-    for(var i=0,l=array.length;i<l;++i) {
-      s += array[i].toString();
-    }
-    return s;
-  }
-  
   function getAtomIndex(templ) { return templ.substring(2, templ.length - 1); }
 
   var s = code.replace(/\r\n?|\n\r/g, "\n"); // remove extra CR
@@ -470,11 +462,11 @@ function parseProcessing(code) {
   // function defined below
   var transformClassBody, transformStatementsBlock, transformStatements, transformMain, transformExpression;
 
-  var classesRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)(class|interface)\s+([A-Za-z_$][\w$]*\b)(\s+extends\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\b)?(\s+implements\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\b)*)?\s*("A\d+")/g;
-  var methodsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:else|new|return|throw|function)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)*)?\s*("A\d+"|;)/g;
-  var fieldTest = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:else|new|return|throw)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*(?:"C\d+"\s*)*([=,]|$)/;
-  var cstrsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*,\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)*)?\s*("A\d+")/g;
-  var attrAndTypeRegex = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*(?:\s*"C\d+")*)\s*/;
+  var classesRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)(class|interface)\s+([A-Za-z_$][\w$]*\b)(\s+extends\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*\b)?(\s+implements\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*,\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*\b)*)?\s*("A\d+")/g;
+  var methodsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:else|new|return|throw|function)\b)[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*,\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)*)?\s*("A\d+"|;)/g;
+  var fieldTest = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:else|new|return|throw)\b)[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*(?:"C\d+"\s*)*([=,]|$)/;
+  var cstrsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*,\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)*)?\s*("A\d+")/g;
+  var attrAndTypeRegex = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*"C\d+")*)\s*/;
   var functionsRegex = /\bfunction(?:\s+([A-Za-z_$][\w$]*))?\s*("B\d+")\s*("A\d+")/g;
 
   function extractClassesAndMethods(code) {
@@ -503,6 +495,26 @@ function parseProcessing(code) {
     return s;
   }
 
+  function AstParam(name) {
+    this.name = name;
+  }
+  AstParam.prototype.toString = function() {
+    return this.name;
+  };
+  function AstParams(params) {
+    this.params = params;
+  }
+  AstParams.prototype.toString = function() {
+    if(this.params.length === 0) { 
+      return "()";
+    }
+    var s = "(";
+    for(var i=0,l=this.params.length;i<l;++i) {
+      s += this.params[i] + ", ";
+    }
+    return s.substring(0, s.length - 2) + ")";
+  };
+
   function transformParams(params) {
     var paramsWoPars = params.substring(1, params.length - 1).trim();
     var result = [];
@@ -510,37 +522,20 @@ function parseProcessing(code) {
       var paramList = paramsWoPars.split(",");
       for(var i=0; i < paramList.length; ++i) {
         var param = /\b([A-Za-z_$][\w$]*\b)\s*$/.exec(paramList[i]);
-        result.push({
-          type:'param',
-          name:param[1],
-          toString: function() { return this.name; }
-        });
+        result.push(new AstParam(param[1]));
       }
     }
-    return {
-      type: 'params',
-      params: result,
-      toString: function() {
-        if(this.params.length === 0) { 
-          return "()";
-        }
-        var s = "(";
-        for(var i=0,l=this.params.length;i<l;++i) {
-          s += this.params[i] + ", ";
-        }
-        return s.substring(0, s.length - 2) + ")";
-      }
-    };
+    return new AstParams(result);
   }
 
   function preExpressionTransform(expr) {
     var s = expr;
     // new type[] {...} --> {...}
-    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)(?:\s*"C\d+")+\s*("A\d+")/g, function(all, type, init) {
+    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)(?:\s*"C\d+")+\s*("A\d+")/g, function(all, type, init) {
       return init;
     });
     // new Runnable() {...} --> "F???"
-    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)(?:\s*"B\d+")\s*("A\d+")/g, function(all, type, init) {
+    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)(?:\s*"B\d+")\s*("A\d+")/g, function(all, type, init) {
       return addAtom(all, 'F');
     });
     // function(...) { } --> "H???"
@@ -548,7 +543,7 @@ function parseProcessing(code) {
       return addAtom(all, 'H');
     });    
     // new type[?] --> new ArrayList(?)
-    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*)\s*("C\d+"(?:\s*"C\d+")*)/g, function(all, type, index) {
+    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)\s*("C\d+"(?:\s*"C\d+")*)/g, function(all, type, index) {
       var args = index.replace(/"C(\d+)"/g, function(all, j) { return atoms[j]; }).
         replace(/\[\s*\]/g, "[0]").replace(/\s*\]\s*\[\s*/g, ", ");
       
@@ -564,7 +559,7 @@ function parseProcessing(code) {
     // delete (type)???, (int)??? -> 0|???
     s = s.replace(/"B(\d+)"(\s*[\w$']|"B)/g, function(all, index, next) {
       var atom = atoms[index];
-      if(!/^\(\s*[A-Za-z_$][\w$]+\b(?:\s*\.\s*[A-Za-z_$][\w$]+\b)*\s*(?:"C\d+"\s*)*\)$/.test(atom)) {
+      if(!/^\(\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*\s*(?:"C\d+"\s*)*\)$/.test(atom)) {
         return all;
       } else if(/^\(\s*int\s*\)$/.test(atom)) {
         return "0|" + next;
@@ -594,39 +589,56 @@ function parseProcessing(code) {
     return s;
   }
 
+  function AstInlineClass(baseInterfaceName, body) {
+    this.baseInterfaceName = baseInterfaceName;
+    this.body = body;
+  }
+  AstInlineClass.prototype.toString = function() {
+    return "new (function() { with(this) {\n" + this.body + "}})";
+  };
+  
   function transformInlineClass(class_) {
     var m = new RegExp(/\bnew\s*(Runnable)\s*"B\d+"\s*"A(\d+)"/).exec(class_);
     if(m === null) {
       return "undefined";
     } else {
       // only Runnable supported
-      return {
-        type: 'inline-class',
-        baseInterfaceName: "Runnable",
-        body: transformClassBody(atoms[m[2]], m[1]),
-        toString: function() {
-          return "new (function() { with(this) {\n" + this.body + "}})";
-        }
-      };
+      return new AstInlineClass("Runnable", transformClassBody(atoms[m[2]], m[1]));
     }
   }
+  
+  function AstFunction(name, params, body) {
+    this.name = name;
+    this.params = params;
+    this.body = body;
+  }
+  AstFunction.prototype.toString = function() {
+    var result = "function";
+    if(this.name) {
+      result += " " + this.name;
+    }
+    return result + this.params + " " + this.body;
+  };
 
   function transformFunction(class_) {
     var m = new RegExp(/\b([A-Za-z_$][\w$]*)\s*"B(\d+)"\s*"A(\d+)"/).exec(class_);
-    return {
-      type: 'function',
-      name: (m[1] !== "function" ? m[1] : undefined),
-      params: atoms[m[2]],
-      body: transformStatementsBlock(atoms[m[3]]),
-      toString: function() {
-        var result = "function";
-        if(this.name) {
-          result += " " + this.name;
-        }
-        return result + this.params + " " + this.body;
-      }
-    };
+    return new AstFunction( m[1] !== "function" ? m[1] : undefined,
+      atoms[m[2]], transformStatementsBlock(atoms[m[3]]));
   }
+  
+  function AstInlineObject(members) {
+    this.members = members;
+  }
+  AstInlineObject.prototype.toString = function() {
+    var s = "";
+    for(var i=0,l=this.members.length;i<l;++i) {
+      if(this.members[i].label) { 
+        s += this.members[i].label + ": ";
+      }
+      s += this.members[i].value.toString() + ", ";
+    }
+    return s.substring(0, s.length - 2);
+  };
   
   function transformInlineObject(obj) {
     var members = obj.split(',');
@@ -639,20 +651,7 @@ function parseProcessing(code) {
           value: transformExpression(members[i].substring(label + 1).trim()) };
       }
     }
-    return {
-      type: 'inline-object',
-      members: members,
-      toString: function() {
-        var s = "";
-        for(var i=0,l=this.members.length;i<l;++i) {
-          if(this.members[i].label) { 
-            s += this.members[i].label + ": ";
-          }
-          s += this.members[i].value.toString() + ", ";
-        }
-        return s.substring(0, s.length - 2);
-      }
-    };      
+    return new AstInlineObject(members);
   }
 
   function expandExpression(expr) {
@@ -674,6 +673,18 @@ function parseProcessing(code) {
     }
   }
   
+  function AstExpression(expr, transforms) {
+    this.expr = expr;
+    this.transforms = transforms;
+  }
+  AstExpression.prototype.toString = function() {
+    var transforms = this.transforms;
+    return this.expr.replace(/"!(\d+)"/g, function(all, index) {
+      return transforms[index].toString();
+    });
+  };
+  
+  
   transformExpression = function(expr) {
     var transforms = [];
     var s = expandExpression(expr);
@@ -690,16 +701,16 @@ function parseProcessing(code) {
       return '"!' + (transforms.length - 1) + '"';
     });
 
-    return {
-      type: 'expression',
-      expr: s,
-      transforms: transforms,
-      toString: function() {
-        return this.expr.replace(/"!(\d+)"/g, function(all, index) {
-          return transforms[index].toString();
-        });
-      }
-    };
+    return new AstExpression(s, transforms);
+  };
+
+  function AstVarDefinition(name, value, isDefault) {
+    this.name = name;
+    this.value = value;
+    this.isDefault = isDefault;
+  }
+  AstVarDefinition.prototype.toString = function() {
+    return this.name + ' = ' + this.value;
   };
 
   function transformVarDefinition(def, defaultTypeValue) {
@@ -714,15 +725,8 @@ function parseProcessing(code) {
       value = transformExpression(def.substring(eqIndex + 1));
       isDefault = false;
     }        
-    return {
-      type: 'var-def',
-      name: name.replace(/(\s*"C\d+")+/g, "").trim(),
-      isDefault: isDefault,
-      value: value,
-      toString: function() {
-        return this.name + ' = ' + this.value;
-      }
-    };
+    return new AstVarDefinition(name.replace(/(\s*"C\d+")+/g, "").trim(),
+      value, isDefault);
   }
   
   function getDefaultValueForType(type) {
@@ -736,6 +740,20 @@ function parseProcessing(code) {
         return "null";
       }
   }
+  
+  function AstVar(definitions, varType) {
+    this.definitions = definitions;
+    this.varType = varType;
+  }
+  AstVar.prototype.toString = function() {
+    return "var " + this.definitions.join(",");
+  };
+  function AstStatement(expression) {
+    this.expression = expression;
+  }
+  AstStatement.prototype.toString = function() {
+    return this.expression.toString();
+  };
 
   function transformStatement(statement) {
     if(fieldTest.test(statement)) {
@@ -745,75 +763,78 @@ function parseProcessing(code) {
       for(var i=0; i < definitions.length; ++i) {
         definitions[i] = transformVarDefinition(definitions[i], defaultTypeValue);
       }
-      return {
-        type: "var",
-        definitions: definitions,
-        varType: attrAndType[2],
-        toString: function() {
-          return "var " + this.definitions.join(",");
-        }
-      };
+      return new AstVar(definitions, attrAndType[2]);
     } else {
-      return {
-        type: 'statement',
-        expression: transformExpression(statement),
-        toString: function() { return this.expression.toString(); }
-      };
+      return new AstStatement(transformExpression(statement));
     }
   }
 
+  function AstForExpression(initStatement, condition, step) {
+    this.initStatement = initStatement;
+    this.condition = condition;
+    this.step = step;
+  }
+  AstForExpression.prototype.toString = function() {
+    return "(" + this.initStatement + "; " + this.condition + "; " + this.step + ")";
+  };
+  
   function transformForExpression(expr) {
     var content = expr.substring(1, expr.length - 1).split(";");
-    return {
-      type: 'for-arg',
-      initStatement: transformStatement(content[0]),
-      condition: transformExpression(content[1]),
-      step: transformExpression(content[2]),
-      toString: function() {
-        return "(" + this.initStatement + "; " + this.condition + "; " + this.step + ")";
-      }
-    };
+    return new AstForExpression(transformStatement(content[0]),
+      transformExpression(content[1]), transformExpression(content[2]));
   }
-
+  
+  function AstInnerInterface(name) {
+    this.name = name;
+  }
+  AstInnerInterface.prototype.toString = function() {
+    return  "this." + this.name + " = function " + this.name + "() { "+
+      "throw 'This is an interface'; };";
+  };
+  function AstInnerClass(name, body) {
+    this.name = name;
+    this.body = body;
+  }
+  AstInnerClass.prototype.toString = function() {
+    return "this." + this.name + " = function " + this.name + "() { with(this) {\n" +
+      this.body + "}};";        
+  };
+  
   function transformInnerClass(class_) {
     var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
     classesRegex.lastIndex = 0;
     var body = atoms[getAtomIndex(m[6])];
     if(m[2] === "interface") {
-      return {
-        type: 'interface',
-        name: m[3],
-        toString: function() {
-          return  "this." + this.name + " = function " + this.name + "() { "+
-            "throw 'This is an interface'; };";
-        }
-      };
+      return new AstInnerInterface(m[3]);
     } else {
-      return {
-        type: 'class',
-        body: transformClassBody(body, m[3], m[4], m[5]),
-        toString: function() {
-          return "this." + m[3] + " = function " + m[3] + "() { with(this) {\n" +
-            transformClassBody(body, m[3], m[4], m[5]) + "}};";        
-        }
-      };
+      return new AstInnerClass(m[3], transformClassBody(body, m[3], m[4], m[5]));
     }
   }
+  
+  function AstClassMethod(name, params, body) {
+    this.name = name;
+    this.params = params;
+    this.body = body;
+  }
+  AstClassMethod.prototype.toString = function(){
+    return "addMethod(this, '" + this.name + "', function " + this.params + " " +
+      this.body +");";
+  };
 
   function transformClassMethod(method) {
     var m = methodsRegex.exec(method);
     methodsRegex.lastIndex = 0;
-    return {
-      type: 'method',
-      name: m[3],
-      params: transformParams(atoms[getAtomIndex(m[4])]),
-      body: transformStatementsBlock(atoms[getAtomIndex(m[6])]),
-      toString: function(){
-        return "addMethod(this, '" + this.name + "', function " + this.params + " " +
-          this.body +");";
-      }
-    };
+    return new AstClassMethod(m[3], transformParams(atoms[getAtomIndex(m[4])]),
+      transformStatementsBlock(atoms[getAtomIndex(m[6])]) );
   }
+  
+  function AstClassField(definitions, fieldType) {
+    this.definitions = definitions;
+    this.fieldType = fieldType;
+  }
+  AstClassField.prototype.toString = function() {
+    return "this." + this.definitions.join("; this.");
+  };
 
   function transformClassField(statement) {
     var attrAndType = attrAndTypeRegex.exec(statement);
@@ -822,8 +843,54 @@ function parseProcessing(code) {
     for(var i=0; i < definitions.length; ++i) {
       definitions[i] = transformVarDefinition(definitions[i], defaultTypeValue);
     }
-    return "this." + definitions.join("; this.");
+    return new AstClassField(definitions, attrAndType[2]);
   }
+  
+  function AstConstructor(params, statements) {
+    this.params = params;
+    this.statements = statements;
+  }
+  AstConstructor.prototype.toString = function() {
+    var params = this.params.toString();
+    var paramNames = params.substring(1, params.length - 1).split(", ");
+    if(paramNames.length === 1 && paramNames[0] === '') { paramNames = []; }
+
+    var prefix = "if(arguments.length === " + paramNames.length + ") {\n";
+    for(var j = 0; j < paramNames.length; ++j) {
+      prefix += "  var " + paramNames[j] + " = arguments[" + j + "];\n";
+    }
+
+    return prefix + this.statements.join('') + '}\n';      
+  };
+  
+  function AstClassBody(baseClassName, functions, methods, fields, cstrs, innerClasses, misc) {
+    this.baseClassName = baseClassName;
+    this.functions = functions;
+    this.methods = methods;
+    this.fields = fields;
+    this.cstrs = cstrs;
+    this.innerClasses = innerClasses;
+    this.misc = misc;
+  }
+  AstClassBody.prototype.toString = function() {
+    var s = "";
+    if(this.baseClassName) {
+      s += "var __self=this;function superMethod(){extendClass(__self,arguments," + 
+        this.baseClassName + ");}\n";
+    }
+    s += this.functions.join('\n') + '\n';
+    s += this.methods.join('\n') + '\n';
+    s += this.fields.join(";\n") + ";\n";
+
+    if(this.baseClassName) {
+      s += "extendClass(__self,arguments);\n";
+    }
+
+    s += this.cstrs.join(" else ");
+    s += this.innerClasses.join('\n');
+    s += this.misc.tail;
+    return s;
+  };
 
   transformClassBody = function(body, name, base, impls) {
     var declarations = body.substring(1, body.length - 1);
@@ -839,22 +906,22 @@ function parseProcessing(code) {
     });
     var fields = declarations.split(';');
     var i, baseClassName;
-    var result = { type:'class', functions: [], methods: [], fields: [], cstrs: [], inner: [] };
+
     if(base !== undefined) {
-      baseClassName = base.replace(/^\s*extends\s+([A-Za-z_$][\w$]+)\s*$/g, "$1");
-      result.baseClassName = baseClassName;
+      baseClassName = base.replace(/^\s*extends\s+([A-Za-z_$][\w$]*)\s*$/g, "$1");
     }
+    
     for(i = 0; i < functions.length; ++i) {
-      result.functions.push(transformFunction(atoms[functions[i]]));
+      functions[i] = transformFunction(atoms[functions[i]]);
     }
     for(i = 0; i < methods.length; ++i) {
-      result.methods.push(transformClassMethod(atoms[methods[i]]));
+      methods[i] = transformClassMethod(atoms[methods[i]]);
     }
     for(i = 0; i < fields.length - 1; ++i) {
       var field = trimSpaces(fields[i]);
-      result.fields.push(transformClassField(field.middle));
+      fields[i] = transformClassField(field.middle);
     }
-    var tail = fields[fields.length - 1];
+    var tail = fields.pop();
     
     for(i = 0; i < cstrs.length; ++i) {
       var m = new RegExp(/"B(\d+)"\s+"A(\d+)"/).exec(atoms[cstrs[i]]);
@@ -863,90 +930,61 @@ function parseProcessing(code) {
       var cstrBody = atoms[m[2]];
       cstrBody = cstrBody.substring(1, cstrBody.length - 1);
       
-      result.cstrs.push({
-        type: 'constructor',
-        params: params,
-        statements: transformStatements(cstrBody),
-        toString: function() {
-          var params = this.params.toString();
-          var paramNames = params.substring(1, params.length - 1).split(", ");
-          if(paramNames.length === 1 && paramNames[0] === '') { paramNames = []; }
-
-          var prefix = "if(arguments.length === " + paramNames.length + ") {\n";
-          for(var j = 0; j < paramNames.length; ++j) {
-            prefix += "  var " + paramNames[j] + " = arguments[" + j + "];\n";
-          }
-
-          return prefix + collapseToString(this.statements) + '}\n';      
-        }
-      });        
+      cstrs[i] = new AstConstructor(params, transformStatements(cstrBody));
     }
 
     for(i = 0; i < classes.length; ++i) {
-     result.inner.push(transformInnerClass(atoms[classes[i]]));
+     classes[i] = transformInnerClass(atoms[classes[i]]);
     }
     
-    result.toString = function() {
-      var s = "";
-      if(base !== undefined) {
-        s += "var __self=this;function superMethod(){extendClass(__self,arguments," + 
-          this.baseClassName + ");}\n";
-      }
-      s += this.functions.join('\n');
-      s += this.methods.join('\n');
-      s += this.fields.join(";\n") + ";\n";
-
-      if(base !== undefined) {
-        s += "extendClass(__self,arguments);\n";
-      }
-
-      s += this.cstrs.join(" else ");
-      s += this.inner.join('\n');
-      s += tail;
-      return s;
-    };
-    return result;
+    return new AstClassBody(baseClassName, functions, methods, fields, cstrs,
+      classes, { tail: tail });
   };
+
+  function AstInterface(name) {
+    this.name = name;
+  }
+  AstInterface.prototype.toString = function() {
+    return  "processing." + this.name + " = function " + this.name + "() { "+
+      "throw 'This is an interface'; };";
+  };
+  function AstClass(name, body) {
+    this.name = name;
+    this.body = body;
+  }
+  AstClass.prototype.toString = function() {
+    return "processing." + this.name + " = function " + this.name + "() { with(this) {\n" +
+      this.body + "}};";        
+  };
+  
 
   function transformGlobalClass(class_) {
     var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
     classesRegex.lastIndex = 0;
     var body = atoms[getAtomIndex(m[6])];
     if(m[2] === "interface") {
-      return {
-        type: 'interface',
-        name: m[3],
-        toString: function() {
-          return  "processing." + this.name + " = function " + this.name + "() { "+
-            "throw 'This is an interface'; };";
-        }
-      };
+      return new AstInterface(m[3]);
     } else {
-      return {
-        type: 'class',
-        body: transformClassBody(body, m[3], m[4], m[5]),
-        toString: function() {
-          return "processing." + m[3] + " = function " + m[3] + "() { with(this) {\n" +
-            transformClassBody(body, m[3], m[4], m[5]) + "}};";        
-        }
-      };
+      return new AstClass(m[3], transformClassBody(body, m[3], m[4], m[5]) );
     }
   }
+
+  function AstMethod(name, params, body) {
+    this.name = name;
+    this.params = params;
+    this.body = body;
+  }
+  AstMethod.prototype.toString = function(){
+    return "processing." + this.name + " = function " + this.name + this.params + " " +
+      this.body + ";";
+  };
 
   function transformGlobalMethod(method) {
     var m = methodsRegex.exec(method);
     var result = 
     methodsRegex.lastIndex = 0;
-    return {
-      type: 'method',
-      name: m[3],
-      params: transformParams(atoms[getAtomIndex(m[4])]),
-      body: transformStatementsBlock(atoms[getAtomIndex(m[6])]),
-      toString: function() { 
-        return "processing." + this.name + " = function " + this.name + this.params + " " +
-          this.body + ";";
-      }
-    };
+    return new AstMethod(m[3], transformParams(atoms[getAtomIndex(m[4])]),
+      transformStatementsBlock(atoms[getAtomIndex(m[6])]));
   }
   
   function preStatementsTransform(statements) {
@@ -955,8 +993,41 @@ function parseProcessing(code) {
     return s;
   }
 
+  function AstForStatement(argument, misc) {
+    this.argument = argument;
+    this.misc = misc;
+  }
+  AstForStatement.prototype.toString = function() {
+    return this.misc.prefix + this.argument.toString();
+  };
+  function AstCatchStatement(argument, misc) {
+    this.argument = argument;
+    this.misc = misc;
+  }
+  AstCatchStatement.prototype.toString = function() {
+    return this.misc.prefix + this.argument.toString();
+  };
+  function AstPrefixStatement(name, argument, misc) {
+    this.name = name;
+    this.argument = argument;
+    this.misc = misc;
+  }
+  AstPrefixStatement.prototype.toString = function() {
+    var result = this.misc.prefix;
+    if(this.argument !== undefined) {
+      result += this.argument.toString();
+    }
+    return result;
+  };
+  function AstLabel(label) {
+    this.label = label;    
+  }
+  AstLabel.prototype.toString = function() {
+    return this.label;
+  };
+  
   transformStatements = function(statements, transformMethod, transformClass) {
-    var nextStatement = new RegExp(/\b(catch|for|if|switch|while|with)\s*"B(\d+)"|\b(do|else|finally|return|throw|try|break|continue)\b|("[ADEH](\d+)")|\b((?:case\s[^:]+|[A-Za-z_$][\w$]+\s*):)|(;)/g);
+    var nextStatement = new RegExp(/\b(catch|for|if|switch|while|with)\s*"B(\d+)"|\b(do|else|finally|return|throw|try|break|continue)\b|("[ADEH](\d+)")|\b((?:case\s[^:]+|[A-Za-z_$][\w$]*\s*):)|(;)/g);
     var res = [];
     statements = preStatementsTransform(statements);
     var lastIndex = 0, m, space;
@@ -965,33 +1036,18 @@ function parseProcessing(code) {
         var i = statements.lastIndexOf('"B', nextStatement.lastIndex);
         var statementsPrefix = statements.substring(lastIndex, i);
         if(m[1] === "for") {
-          res.push({ 
-            type: m[1], 
-            argument: transformForExpression(atoms[m[2]]), 
-            prefix: statementsPrefix,
-            toString: function() { return this.prefix + this.argument; }
-          });
+          res.push(new AstForStatement(transformForExpression(atoms[m[2]]), 
+            { prefix: statementsPrefix }) );
         } else if(m[1] === "catch") {
-          res.push({ 
-            type: m[1], 
-            argument: transformParams(atoms[m[2]]), 
-            prefix: statementsPrefix,
-            toString: function() { return this.prefix + this.argument; }
-          });
+          res.push(new AstCatchStatement(transformParams(atoms[m[2]]), 
+            { prefix: statementsPrefix }) );
         } else {
-          res.push({ 
-            type: m[1], 
-            argument: transformExpression(atoms[m[2]]), 
-            prefix: statementsPrefix,
-            toString: function() { return this.prefix + this.argument; }
-          });
+          res.push(new AstPrefixStatement(m[1], transformExpression(atoms[m[2]]), 
+            { prefix: statementsPrefix }) );
         }
       } else if(m[3] !== undefined) { // do, else, ...
-          res.push({ 
-            type: m[3], 
-            prefix: statements.substring(lastIndex, nextStatement.lastIndex),
-            toString: function() { return this.prefix; }
-          });
+          res.push(new AstPrefixStatement(m[3], undefined,
+            { prefix: statements.substring(lastIndex, nextStatement.lastIndex) }) );
       } else if(m[4] !== undefined) { // block, class and methods
         space = statements.substring(lastIndex, nextStatement.lastIndex - m[4].length);
         if(space.trim().length !== 0) { continue; } // avoiding new type[] {} construct
@@ -1009,11 +1065,7 @@ function parseProcessing(code) {
       } else if(m[6] !== undefined) { // label
         space = statements.substring(lastIndex, nextStatement.lastIndex - m[6].length);
         if(space.trim().length !== 0) { continue; } // avoiding ?: construct        
-        res.push({
-          type: "label",
-          label: statements.substring(lastIndex, nextStatement.lastIndex),
-          toString: function() { return this.label; }
-        });
+        res.push(new AstLabel(statements.substring(lastIndex, nextStatement.lastIndex)) );
       } else { // semicolon
         var statement = trimSpaces(statements.substring(lastIndex, nextStatement.lastIndex - 1));
         res.push(statement.left);
@@ -1026,26 +1078,31 @@ function parseProcessing(code) {
     return res;
   };
 
+  function AstStatementsBlock(statements) {
+    this.statements = statements;
+  }
+  AstStatementsBlock.prototype.toString = function() {
+    return "{\n" + this.statements.join('') + "\n}"; 
+  };
+  
   transformStatementsBlock = function(block) {
     var content = trimSpaces(block.substring(1, block.length - 1));
-    var statements = transformStatements(content.middle);
-    return { 
-      type: "block",
-      statements: statements,
-      toString: function() { 
-        return "{\n" + collapseToString(this.statements) + "\n}"; 
-      }
-    };
+    return new AstStatementsBlock(transformStatements(content.middle));
+  };
+
+  function AstRoot(statements) {
+    this.statements = statements;
+  }
+  AstRoot.prototype.toString = function() {
+    return "// this code was autogenerated from PJS\n" + 
+      this.statements.join('') + "\n"; 
   };
 
   transformMain = function() {     
     var statements = extractClassesAndMethods(atoms[0]);
     statements = statements.replace(/\bimport\s+[^;]+;/g, "");
-    return { 
-      type: "global", 
-      statements: transformStatements(statements, transformGlobalMethod, transformGlobalClass),
-      toString: function() { return collapseToString(this.statements); }
-    };
+    return new AstRoot( transformStatements(statements, 
+      transformGlobalMethod, transformGlobalClass) );
   };    
 
   var transformed = transformMain().toString();
