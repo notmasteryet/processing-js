@@ -387,9 +387,52 @@
   // Place-holder for debugging function
   Processing.debug = function(e) {};
 
-// Parser starts
+function getGlobalMembers() {
+  var names =
+["abs","acos","ADD","alpha","ALPHA","ALT","ambient","ambientLight","append","applyMatrix","arc",
+"ARGB","arrayCopy","ArrayList","ARROW","asin","atan","atan2","background","BACKSPACE","beginCamera",
+"beginDraw","beginShape","BEVEL","bezier","bezierPoint","bezierTangent","bezierVertex","binary",
+"blend","BLEND","blendColor","blue","BLUE_MASK","boolean","box","BURN","byte","camera","ceil",
+"CENTER","CENTER_RADIUS","char","clear","CLOSE","CMYK","CODED","color","colorMode","concat",
+"console","constrain","CONTROL","copy","CORNER","CORNERS","cos","createFont","createGraphics",
+"createImage","CROSS","cursor","curve","curveDetail","curvePoint","curveTangent","curveTightness",
+"curveVertex","curveVertexSegment","DARKEST","day","defaultColor","degrees","DELETE","DIFFERENCE",
+"directionalLight","disableContextMenu","dist","DODGE","DOWN","draw","ellipse","ellipseMode",
+"emissive","enableContextMenu","endCamera","endDraw","endShape","ENTER","ESC","EXCLUSION",
+"exit","exp","expand","fill","filter_bilinear","filter_new_scanline","float","floor","focused",
+"frameCount","frameRate","FRAME_RATE","frustum","get","glyphLook","glyphTable","green",
+"GREEN_MASK","HALF_PI","HAND","HARD_LIGHT","HashMap","height","hex","hour","HSB","image",
+"imageMode","Import","int","intersect","join","key","keyPressed","keyReleased","LEFT","lerp",
+"lerpColor","LIGHTEST","lightFalloff","lights","lightSpecular","line","LINES","link","loadBytes",
+"loadFont","loadGlyphs","loadImage","loadPixels","loadStrings","log","loop","mag","map","match",
+"matchAll","max","MAX_FLOAT","MAX_INT","MAX_LIGHTS","millis","min","MIN_FLOAT","MIN_INT","minute",
+"MITER","mix","modelX","modelY","modelZ","modes","month","mouseButton","mouseClicked","mouseDown",
+"mouseDragged","mouseMoved","mousePressed","mouseReleased","mouseScroll","mouseScrolled","mouseX",
+"mouseY","MOVE","MULTIPLY","nf","nfc","nfp","nfs","noCursor","NOCURSOR","noFill","noise",
+"noLights","noLoop","norm","normal","NORMAL_MODE_AUTO","NORMAL_MODE_SHAPE","NORMAL_MODE_VERTEX",
+"noSmooth","noStroke","noTint","OPENGL","OVERLAY","P3D","peg","perspective","PI","PImage","pixels",
+"pmouseX","pmouseY","point","Point","pointLight","POINTS","POLYGON","popMatrix","popStyle",
+"pow","PREC_ALPHA_SHIFT","PRECISIONB","PRECISIONF","PREC_MAXVAL","PREC_RED_SHIFT","print",
+"printCamera","println","printMatrix","printProjection","PROJECT","pushMatrix","pushStyle",
+"PVector","quad","QUADS","QUAD_STRIP","radians","RADIUS","random","Random","randomSeed", "rect",
+"rectMode","red","RED_MASK","redraw","REPLACE","requestImage","resetMatrix","RETURN","reverse","RGB",
+"RIGHT","rotate","rotateX","rotateY","rotateZ","round","ROUND","save","scale","SCREEN",
+"second","set","setup","shared","SHIFT","shininess","shorten","sin","SINCOS_LENGTH","size",
+"smooth","SOFT_LIGHT","sort","specular","sphere","sphereDetail","splice","split","splitTokens",
+"spotLight","sq","sqrt","SQUARE","str","stroke","strokeCap","strokeJoin","strokeWeight",
+"subset","SUBTRACT","TAB","tan","text","TEXT","textAlign","textAscent","textDescent","textFont",
+"textSize","textWidth","tint",
+"translate","triangle","TRIANGLE_FAN","TRIANGLES","TRIANGLE_STRIP","trim","TWO_PI","unbinary",
+"unhex","UP","updatePixels","use3DContext","vertex","WAIT","width","year"];
+  var members = {};
+  for(var i=0,l=names.length;i<l;++i) {
+    members[names[i]] = undefined;
+  }
+  return members;
+}
+var globalMembers = getGlobalMembers();
 
-var globalMembers = {"print":null};
+// Parser starts
 
 function parseProcessing(code) {
 
@@ -897,7 +940,7 @@ function parseProcessing(code) {
     replaceContext = function(name) {
       return inArray(paramNames, name) ? name : oldContext(name);
     };
-    var result = "addMethod(" + thisReplacement + ", '" + this.name + "', function " + this.params + " " +
+    var result = "processing.addMethod(" + thisReplacement + ", '" + this.name + "', function " + this.params + " " +
       this.body +");";
     replaceContext = oldContext;
     return result;
@@ -1022,7 +1065,7 @@ function parseProcessing(code) {
 
     if(this.baseClassName) {
       s += "var $superProxy;\n";
-      s += "function superMethod(){ $superProxy = extendClass(" + selfId + ",arguments," +
+      s += "function superMethod(){ $superProxy = processing.extendClass(" + selfId + ",arguments," +
         this.baseClassName + "); $initMembers(); }\n";
     } else {
       s += "function superMethod() { $initMembers(); }\n";
@@ -1101,8 +1144,8 @@ function parseProcessing(code) {
     this.name = name;
   }
   AstInterface.prototype.toString = function() {
-    return  "processing." + this.name + " = function " + this.name + "() { "+
-      "throw 'This is an interface'; };";
+    return "function " + this.name + "() {  throw 'This is an interface'; }\n" +
+      "processing." + this.name + " = " + this.name + ";";
   };
   function AstClass(name, body) {
     this.name = name;
@@ -1110,8 +1153,8 @@ function parseProcessing(code) {
     body.owner = this;
   }
   AstClass.prototype.toString = function() {
-    return "processing." + this.name + " = function " + this.name + "() {\n" +
-      this.body + "};";
+    return "function " + this.name + "() {\n" + this.body + "}\n" +
+      "processing." + this.name + " = " + this.name + ";";
   };
 
 
@@ -1138,8 +1181,8 @@ function parseProcessing(code) {
     this.body = body;
   }
   AstMethod.prototype.toString = function(){
-    return "processing." + this.name + " = function " + this.name + this.params + " " +
-      this.body + ";";
+    return "function " + this.name + this.params + " " + this.body + "\n" +
+      "processing." + this.name + " = " + this.name + ";";
   };
 
   function transformGlobalMethod(method) {
@@ -7806,29 +7849,27 @@ function parseProcessing(code) {
         }
 
         var executeSketch = function(processing) {
-          with(processing) {
-            // Don't start until all specified images in the cache are preloaded
-            if (!pjs.imageCache.pending) {
-              eval(parsedCode);
+          // Don't start until all specified images in the cache are preloaded
+          if (!processing.pjs.imageCache.pending) {
+            eval(parsedCode);
 
-              // Run void setup()
-              if (setup) {
-                inSetup = true;
-                setup();
-              }
-
-              inSetup = false;
-
-              if (draw) {
-                if (!doLoop) {
-                  redraw();
-                } else {
-                  loop();
-                }
-              }
-            } else {
-              window.setTimeout(executeSketch, 10, processing);
+            // Run void setup()
+            if (processing.setup) {
+              inSetup = true;
+              processing.setup();
             }
+
+            inSetup = false;
+
+            if (processing.draw) {
+              if (!processing.doLoop) {
+                processing.redraw();
+              } else {
+                processing.loop();
+              }
+            }
+          } else {
+            window.setTimeout(executeSketch, 10, processing);
           }
         };
 
