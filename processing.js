@@ -452,7 +452,8 @@ function parseProcessing(code) {
   });
   
   var atoms = splitToAtoms(s);
-
+  var varContext;
+  
   function addAtom(s, type) { 
     var lastIndex = atoms.length; 
     atoms.push(s);
@@ -673,18 +674,29 @@ function parseProcessing(code) {
     }
   }
   
+  function replaceVarContext(expr) {
+    return expr.replace(/(\.\s*)?(\b[A-Za-z_$][\w$]*\b)/g, 
+      function(all, memberAccessSign, identifier) {
+        if(memberAccessSign) {
+          return all;
+        } else {
+          return varContext.get(identifier);
+        }
+      });
+  }
+  
   function AstExpression(expr, transforms) {
     this.expr = expr;
     this.transforms = transforms;
   }
   AstExpression.prototype.toString = function() {
     var transforms = this.transforms;
-    return this.expr.replace(/"!(\d+)"/g, function(all, index) {
+    var expr = replaceVarContext(this.expr);
+    return expr.replace(/"!(\d+)"/g, function(all, index) {
       return transforms[index].toString();
     });
   };
-  
-  
+    
   transformExpression = function(expr) {
     var transforms = [];
     var s = expandExpression(expr);
@@ -817,7 +829,8 @@ function parseProcessing(code) {
     this.body = body;
   }
   AstClassMethod.prototype.toString = function(){
-    return "addMethod(this, '" + this.name + "', function " + this.params + " " +
+    var thisReplacement = varContext.get("this");
+    return "addMethod(" + thisReplacement + ", '" + this.name + "', function " + this.params + " " +
       this.body +");";
   };
 
@@ -833,7 +846,8 @@ function parseProcessing(code) {
     this.fieldType = fieldType;
   }
   AstClassField.prototype.toString = function() {
-    return "this." + this.definitions.join("; this.");
+    var thisPrefix = varContext.get("this") + ".";
+    return thisPrefix + this.definitions.join("; " + thisPrefix);
   };
 
   function transformClassField(statement) {
@@ -851,18 +865,25 @@ function parseProcessing(code) {
     this.statements = statements;
   }
   AstConstructor.prototype.toString = function() {
-    var params = this.params.toString();
-    var paramNames = params.substring(1, params.length - 1).split(", ");
-    if(paramNames.length === 1 && paramNames[0] === '') { paramNames = []; }
-
-    var prefix = "if(arguments.length === " + paramNames.length + ") {\n";
-    for(var j = 0; j < paramNames.length; ++j) {
-      prefix += "  var " + paramNames[j] + " = arguments[" + j + "];\n";
+    var prefix = "function $constr_" + this.params.params.length + this.params + "{\n";
+    var body = this.statements.join('');
+    if(!/\bsuperMethod\b/.test(body)) {
+      body = "superMethod();\n" + body;
     }
-
-    return prefix + this.statements.join('') + '}\n';      
+    return prefix + body + "}\n";
   };
   
+  function transformConstructor(cstr) {
+    var m = new RegExp(/"B(\d+)"\s+"A(\d+)"/).exec(cstr);
+    var params = transformParams(atoms[m[1]]);
+
+    var cstrBody = atoms[m[2]];
+    cstrBody = cstrBody.substring(1, cstrBody.length - 1);
+    
+    return new AstConstructor(params, transformStatements(cstrBody));
+  }
+  
+  var selfIdSeed = 0;
   function AstClassBody(baseClassName, functions, methods, fields, cstrs, innerClasses, misc) {
     this.baseClassName = baseClassName;
     this.functions = functions;
@@ -873,25 +894,55 @@ function parseProcessing(code) {
     this.misc = misc;
   }
   AstClassBody.prototype.toString = function() {
-    var s = "";
+    var selfId = "$this_" + (++selfIdSeed);
+    var s = "var " + selfId + " = this, $initMembers;\n";
+    
+    var previousContext = varContext;
+    varContext = {
+      get: function(name) {
+        if(name === "this") {
+          return selfId;          
+        }
+        return previousContext.get(name);
+      }
+    };
+
     if(this.baseClassName) {
-      s += "var __self=this;function superMethod(){extendClass(__self,arguments," + 
-        this.baseClassName + ");}\n";
+      s += "var $superProxy;\n";
+      s += "function superMethod(){ $superProxy = extendClass(" + selfId + ",arguments," + 
+        this.baseClassName + "); $initMembers(); }\n";
+    } else {
+      s += "function superMethod() { $initMembers(); }\n";
     }
+        
     s += this.functions.join('\n') + '\n';
-    s += this.methods.join('\n') + '\n';
+    
+    s += "$initMembers = function() {\n";
     s += this.fields.join(";\n") + ";\n";
-
-    if(this.baseClassName) {
-      s += "extendClass(__self,arguments);\n";
-    }
-
-    s += this.cstrs.join(" else ");
+    s += this.methods.join('\n') + '\n';
     s += this.innerClasses.join('\n');
     s += this.misc.tail;
+    s += "}\n";
+
+    s += this.cstrs.join('\n') + '\n';
+
+    
+    var cstrsIfs = [];
+    for(var i=0,l=this.cstrs.length;i<l;++i) {
+      var paramsLength = this.cstrs[i].params.params.length;
+      cstrsIfs.push("if(arguments.length === " + paramsLength + ") {\n" +
+        "$constr_" + paramsLength + ".apply(this, arguments);\n}");
+    }
+    if(cstrsIfs.length > 0) {
+      s += cstrsIfs.join(" else ") + " else \n";
+    }
+    // ??? add check if length is 0, otherwise fail
+    s += " superMethod();\n"; 
+
+    varContext = previousContext;
     return s;
   };
-
+  
   transformClassBody = function(body, name, base, impls) {
     var declarations = body.substring(1, body.length - 1);
     declarations = extractClassesAndMethods(declarations);
@@ -921,20 +972,12 @@ function parseProcessing(code) {
       var field = trimSpaces(fields[i]);
       fields[i] = transformClassField(field.middle);
     }
-    var tail = fields.pop();
-    
+    var tail = fields.pop();    
     for(i = 0; i < cstrs.length; ++i) {
-      var m = new RegExp(/"B(\d+)"\s+"A(\d+)"/).exec(atoms[cstrs[i]]);
-      var params = transformParams(atoms[m[1]]);
-
-      var cstrBody = atoms[m[2]];
-      cstrBody = cstrBody.substring(1, cstrBody.length - 1);
-      
-      cstrs[i] = new AstConstructor(params, transformStatements(cstrBody));
+      cstrs[i] = transformConstructor(atoms[cstrs[i]]);
     }
-
     for(i = 0; i < classes.length; ++i) {
-     classes[i] = transformInnerClass(atoms[classes[i]]);
+      classes[i] = transformInnerClass(atoms[classes[i]]);
     }
     
     return new AstClassBody(baseClassName, functions, methods, fields, cstrs,
@@ -1094,8 +1137,19 @@ function parseProcessing(code) {
     this.statements = statements;
   }
   AstRoot.prototype.toString = function() {
-    return "// this code was autogenerated from PJS\n" + 
+    varContext = {
+      globals: {print:null},
+      get: function(name) {
+          if(name in this.globals) {
+            return "processing." + name;
+          }
+          return name;
+        }
+    };
+    var result = "// this code was autogenerated from PJS\n" + 
       this.statements.join('') + "\n"; 
+    varContext = undefined;
+    return result;
   };
 
   transformMain = function() {     
