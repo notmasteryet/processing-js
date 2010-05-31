@@ -389,7 +389,10 @@
 
 // Parser starts
 
+var globalMembers = {"print":null};
+
 function parseProcessing(code) {
+
   function splitToAtoms(s) {
     var atoms = [], stack = [];
     var items = s.split(/([\{\[\(\)\]\}])/);
@@ -433,7 +436,7 @@ function parseProcessing(code) {
   }
   
   function inArray(array, item) {
-    for(var i=0,l=array.lengh;i<l;++i) {
+    for(var i=0,l=array.length;i<l;++i) {
       if(array[i] === item) { 
         return true;
       }
@@ -461,7 +464,7 @@ function parseProcessing(code) {
   });
 
   var atoms = splitToAtoms(s);
-  var varContext;
+  var replaceContext;
   var declaredClasses = {}, currentClassId, classIdSeed = 0;
 
   function addAtom(s, type) {
@@ -623,7 +626,7 @@ function parseProcessing(code) {
     body.owner = this;
   }
   AstInlineClass.prototype.toString = function() {
-    return "new (function() { with(this) {\n" + this.body + "}})";
+    return "new (function() {\n" + this.body + "})";
   };
 
   function transformInlineClass(class_) {
@@ -648,20 +651,18 @@ function parseProcessing(code) {
     this.body = body;
   }
   AstFunction.prototype.toString = function() {
-    var oldContext = varContext; 
+    var oldContext = replaceContext; 
     // saving "this." and parameters
     var names = ["this"].concat(this.params.getNames());
-    varContext = {
-      get : function(name) {
-        return inArray(name) ? name : oldContext.get(name); 
-      }
+    replaceContext = function(name) {
+      return inArray(name) ? name : oldContext(name); 
     };
     var result = "function";
     if(this.name) {
       result += " " + this.name;
     }
     result += this.params + " " + this.body;
-    varContext = oldContext;
+    replaceContext = oldContext;
     return result;
   };
 
@@ -675,11 +676,9 @@ function parseProcessing(code) {
     this.members = members;
   }
   AstInlineObject.prototype.toString = function() {
-    var oldContext = varContext; 
-    varContext = {
-      get : function(name) {
-        return name === "this"? name : oldContext.get(name); // saving "this."
-      }
+    var oldContext = replaceContext; 
+    replaceContext = function(name) {
+        return name === "this"? name : oldContext(name); // saving "this."
     };
     var s = "";
     for(var i=0,l=this.members.length;i<l;++i) {
@@ -688,7 +687,7 @@ function parseProcessing(code) {
       }
       s += this.members[i].value.toString() + ", ";
     }
-    varContext = oldContext;
+    replaceContext = oldContext;
     return s.substring(0, s.length - 2);
   };
 
@@ -725,13 +724,13 @@ function parseProcessing(code) {
     }
   }
 
-  function replaceVarContext(expr) {
+  function replaceContextInVars(expr) {
     return expr.replace(/(\.\s*)?(\b[A-Za-z_$][\w$]*\b)/g,
       function(all, memberAccessSign, identifier) {
         if(memberAccessSign) {
           return all;
         } else {
-          return varContext.get(identifier);
+          return replaceContext(identifier);
         }
       });
   }
@@ -742,7 +741,7 @@ function parseProcessing(code) {
   }
   AstExpression.prototype.toString = function() {
     var transforms = this.transforms;
-    var expr = replaceVarContext(this.expr);
+    var expr = replaceContextInVars(this.expr);
     return expr.replace(/"!(\d+)"/g, function(all, index) {
       return transforms[index].toString();
     });
@@ -867,8 +866,8 @@ function parseProcessing(code) {
     body.owner = this;
   }
   AstInnerClass.prototype.toString = function() {
-    return "this." + this.name + " = function " + this.name + "() { with(this) {\n" +
-      this.body + "}};";
+    return "this." + this.name + " = function " + this.name + "() {\n" +
+      this.body + "};";
   };
 
   function transformInnerClass(class_) {
@@ -893,16 +892,14 @@ function parseProcessing(code) {
     this.body = body;
   }
   AstClassMethod.prototype.toString = function(){
-    var thisReplacement = varContext.get("this"), paramNames = this.params.getNames();
-    var oldContext = varContext;
-    varContext = {
-      get: function(name) {
-        return inArray(paramNames, name) ? name : oldContext.get(name);
-      }
+    var thisReplacement = replaceContext("this"), paramNames = this.params.getNames();
+    var oldContext = replaceContext;
+    replaceContext = function(name) {
+      return inArray(paramNames, name) ? name : oldContext(name);
     };
     var result = "addMethod(" + thisReplacement + ", '" + this.name + "', function " + this.params + " " +
       this.body +");";
-    varContext = oldContext;
+    replaceContext = oldContext;
     return result;
   };
 
@@ -925,7 +922,7 @@ function parseProcessing(code) {
     return names;
   };
   AstClassField.prototype.toString = function() {
-    var thisPrefix = varContext.get("this") + ".";
+    var thisPrefix = replaceContext("this") + ".";
     return thisPrefix + this.definitions.join("; " + thisPrefix);
   };
 
@@ -945,18 +942,16 @@ function parseProcessing(code) {
   }
   AstConstructor.prototype.toString = function() {
     var paramNames = this.params.getNames();
-    var oldContext = varContext;
-    varContext = {
-      get: function(name) {
-        return inArray(paramNames, name) ? name : oldContext.get(name);
-      }
+    var oldContext = replaceContext;
+    replaceContext = function(name) {
+      return inArray(paramNames, name) ? name : oldContext(name);
     };
     var prefix = "function $constr_" + this.params.params.length + this.params + "{\n";
     var body = this.body.toString();
     if(!/\bsuperMethod\b/.test(body)) {
       body = "superMethod();\n" + body;
     }
-    varContext = oldContext;
+    replaceContext = oldContext;
     return prefix + body + "}\n";
   };
 
@@ -967,7 +962,6 @@ function parseProcessing(code) {
     return new AstConstructor(params, transformStatementsBlock(atoms[m[2]]));
   }
 
-  var selfIdSeed = 0;
   function AstClassBody(baseClassName, functions, methods, fields, cstrs, innerClasses, misc) {
     this.baseClassName = baseClassName;
     this.functions = functions;
@@ -999,23 +993,31 @@ function parseProcessing(code) {
     return members;
   };
   AstClassBody.prototype.toString = function() {
-    var selfId = "$this_" + (++selfIdSeed);
+    function getScopeLevel(p) {
+      var i = 0;
+      while(p) {
+        ++i;
+        p=p.scope;
+      }
+      return i;
+    }
+    
+    var scopeLevel = getScopeLevel(this.owner);
+    
+    var selfId = "$this_" + scopeLevel;
     var s = "var " + selfId + " = this, $initMembers;\n";
 
     var members = this.getMembers();
     var thisClassNames = [].concat(members.fields, members.methods, members.innerClasses);
     
-    var previousContext = varContext;
-    varContext = {
-      get: function(name) {
-        if(name === "this") {
-          return selfId;
-        }
-        if(inArray(thisClassNames, name)) {
-          return selfId + "." + name;
-        }
-        return previousContext.get(name);
+    var oldContext = replaceContext;
+    replaceContext = function(name) {
+      if(name === "this") {
+        return selfId;
+      } else if(inArray(thisClassNames, name)) {
+        return selfId + "." + name;
       }
+      return oldContext(name);
     };
 
     if(this.baseClassName) {
@@ -1050,7 +1052,7 @@ function parseProcessing(code) {
     // ??? add check if length is 0, otherwise fail
     s += " superMethod();\n";
 
-    varContext = previousContext;
+    replaceContext = oldContext;
     return s;
   };
 
@@ -1108,8 +1110,8 @@ function parseProcessing(code) {
     body.owner = this;
   }
   AstClass.prototype.toString = function() {
-    return "processing." + this.name + " = function " + this.name + "() { with(this) {\n" +
-      this.body + "}};";
+    return "processing." + this.name + " = function " + this.name + "() {\n" +
+      this.body + "};";
   };
 
 
@@ -1249,18 +1251,16 @@ function parseProcessing(code) {
       if(statement instanceof AstVar) {
         localNames = localNames.concat(statement.getNames());
       } else if(statement instanceof AstForStatement &&
-        statement.initStatement instanceof AstVar) {
-        localNames = localNames.concat(statement.initStatement.getNames());        
+        statement.argument.initStatement instanceof AstVar) {
+        localNames = localNames.concat(statement.argument.initStatement.getNames());        
       }
     }
-    var oldContext = varContext;
-    varContext = {
-      get : function(name) {
-        return inArray(localNames, name) ? name : oldContext.get(name);
-      }
+    var oldContext = replaceContext;
+    replaceContext = function(name) {
+      return inArray(localNames, name) ? name : oldContext(name);
     };
     var result = "{\n" + this.statements.join('') + "\n}";
-    varContext = oldContext;
+    replaceContext = oldContext;
     return result;
   };
 
@@ -1273,18 +1273,15 @@ function parseProcessing(code) {
     this.statements = statements;
   }
   AstRoot.prototype.toString = function() {
-    varContext = {
-      globals: {print:null},
-      get: function(name) {
-          if(name in this.globals) {
-            return "processing." + name;
-          }
-          return name;
-        }
+    replaceContext = function(name) {
+      if(name in globalMembers) {
+        return "processing." + name;
+      }
+      return name;
     };
     var result = "// this code was autogenerated from PJS\n" +
       this.statements.join('') + "\n";
-    varContext = undefined;
+    replaceContext = undefined;
     return result;
   };
 
@@ -1299,17 +1296,19 @@ function parseProcessing(code) {
     var globalScope = {};
     var id, class_;
     for(id in declaredClasses) {
-      class_ = declaredClasses[id];
-      var scopeId = class_.scopeId, name = class_.name;
-      if(scopeId) {
-        var scope = declaredClasses[scopeId];
-        class_.scope = scope;
-        if(scope.inScope === undefined) {
-          scope.inScope = {}
+      if(declaredClasses.hasOwnProperty(id)) {
+        class_ = declaredClasses[id];
+        var scopeId = class_.scopeId, name = class_.name;
+        if(scopeId) {
+          var scope = declaredClasses[scopeId];
+          class_.scope = scope;
+          if(scope.inScope === undefined) {
+            scope.inScope = {};
+          }
+          scope.inScope[name] = class_;
+        } else {
+          globalScope[name] = class_;
         }
-        scope.inScope[name] = class_;
-      } else {
-        globalScope[name] = class_;
       }
     }
     
@@ -1332,9 +1331,11 @@ function parseProcessing(code) {
     }
     
     for(id in declaredClasses) {
-      class_ = declaredClasses[id];
-      if(class_.baseClassName) {
-        class_.base = findInScopes(class_, class_.baseClassName);
+      if(declaredClasses.hasOwnProperty(id)) {
+        class_ = declaredClasses[id];
+        if(class_.baseClassName) {
+          class_.base = findInScopes(class_, class_.baseClassName);
+        }
       }
     }
   }
