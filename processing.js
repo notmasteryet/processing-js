@@ -387,1014 +387,6 @@
   // Place-holder for debugging function
   Processing.debug = function(e) {};
 
-function getGlobalMembers() {
-  var names =
-["abs","acos","ADD","alpha","ALPHA","ALT","ambient","ambientLight","append","applyMatrix","arc",
-"ARGB","arrayCopy","ArrayList","ARROW","asin","atan","atan2","background","BACKSPACE","beginCamera",
-"beginDraw","beginShape","BEVEL","bezier","bezierPoint","bezierTangent","bezierVertex","binary",
-"blend","BLEND","blendColor","blue","BLUE_MASK","boolean","box","BURN","byte","camera","ceil",
-"CENTER","CENTER_RADIUS","char","clear","CLOSE","CMYK","CODED","color","colorMode","concat",
-"console","constrain","CONTROL","copy","CORNER","CORNERS","cos","createFont","createGraphics",
-"createImage","CROSS","cursor","curve","curveDetail","curvePoint","curveTangent","curveTightness",
-"curveVertex","curveVertexSegment","DARKEST","day","defaultColor","degrees","DELETE","DIFFERENCE",
-"directionalLight","disableContextMenu","dist","DODGE","DOWN","draw","ellipse","ellipseMode",
-"emissive","enableContextMenu","endCamera","endDraw","endShape","ENTER","ESC","EXCLUSION",
-"exit","exp","expand","fill","filter_bilinear","filter_new_scanline","float","floor","focused",
-"frameCount","frameRate","FRAME_RATE","frustum","get","glyphLook","glyphTable","green",
-"GREEN_MASK","HALF_PI","HAND","HARD_LIGHT","HashMap","height","hex","hour","HSB","image",
-"imageMode","Import","int","intersect","join","key","keyPressed","keyReleased","LEFT","lerp",
-"lerpColor","LIGHTEST","lightFalloff","lights","lightSpecular","line","LINES","link","loadBytes",
-"loadFont","loadGlyphs","loadImage","loadPixels","loadStrings","log","loop","mag","map","match",
-"matchAll","max","MAX_FLOAT","MAX_INT","MAX_LIGHTS","millis","min","MIN_FLOAT","MIN_INT","minute",
-"MITER","mix","modelX","modelY","modelZ","modes","month","mouseButton","mouseClicked","mouseDown",
-"mouseDragged","mouseMoved","mousePressed","mouseReleased","mouseScroll","mouseScrolled","mouseX",
-"mouseY","MOVE","MULTIPLY","nf","nfc","nfp","nfs","noCursor","NOCURSOR","noFill","noise",
-"noLights","noLoop","norm","normal","NORMAL_MODE_AUTO","NORMAL_MODE_SHAPE","NORMAL_MODE_VERTEX",
-"noSmooth","noStroke","noTint","OPENGL","OVERLAY","P3D","peg","perspective","PI","PImage","pixels",
-"pmouseX","pmouseY","point","Point","pointLight","POINTS","POLYGON","popMatrix","popStyle",
-"pow","PREC_ALPHA_SHIFT","PRECISIONB","PRECISIONF","PREC_MAXVAL","PREC_RED_SHIFT","print",
-"printCamera","println","printMatrix","printProjection","PROJECT","pushMatrix","pushStyle",
-"PVector","quad","QUADS","QUAD_STRIP","radians","RADIUS","random","Random","randomSeed", "rect",
-"rectMode","red","RED_MASK","redraw","REPLACE","requestImage","resetMatrix","RETURN","reverse","RGB",
-"RIGHT","rotate","rotateX","rotateY","rotateZ","round","ROUND","save","scale","SCREEN",
-"second","set","setup","shared","SHIFT","shininess","shorten","sin","SINCOS_LENGTH","size",
-"smooth","SOFT_LIGHT","sort","specular","sphere","sphereDetail","splice","split","splitTokens",
-"spotLight","sq","sqrt","SQUARE","str","stroke","strokeCap","strokeJoin","strokeWeight",
-"subset","SUBTRACT","TAB","tan","text","TEXT","textAlign","textAscent","textDescent","textFont",
-"textSize","textWidth","tint",
-"translate","triangle","TRIANGLE_FAN","TRIANGLES","TRIANGLE_STRIP","trim","TWO_PI","unbinary",
-"unhex","UP","updatePixels","use3DContext","vertex","WAIT","width","year"];
-  var members = {};
-  for(var i=0,l=names.length;i<l;++i) {
-    members[names[i]] = undefined;
-  }
-  return members;
-}
-var globalMembers = getGlobalMembers();
-
-// Parser starts
-
-function parseProcessing(code) {
-
-  function splitToAtoms(s) {
-    var atoms = [], stack = [];
-    var items = s.split(/([\{\[\(\)\]\}])/);
-    s = items[0];
-    for(var i=1; i < items.length; i += 2) {
-      var item = items[i];
-      if(item === '[' || item === '{' || item === '(') {
-        stack.push(s); s = item;
-      } else if(item === ']' || item === '}' || item === ')') {
-        var kind = item === '}' ? 'A' : item === ')' ? 'B' : 'C';
-        var index = atoms.length; atoms.push(s + item);
-        s = stack.pop() + '"' + kind + (index + 1) + '"';
-      }
-      s += items[i + 1];
-    }
-    atoms.unshift(s);
-    return atoms;
-  }
-
-  function injectStrings(s, strings) {
-    return s.replace(/'(\d+)'/g, function(all, index) {
-      var val = strings[index];
-      if(val.charAt(0) === "/") {
-        return val;
-      } else {
-        return (/^'((?:[^'\\\n])|(?:\\.[0-9A-Fa-f]*))'$/).test(val) ? "(new Char(" + val + "))" : val;
-      }
-    });
-  }
-
-  function trimSpaces(s) {
-    var m1 = /^\s*/.exec(s), result;
-    if(m1[0].length === s.length) {
-      result = {left: m1[0], middle: "", right: ""};
-    } else {
-      var m2 = /\s*$/.exec(s);
-      result = {left: m1[0], middle: s.substring(m1[0].length, m2.index), right: m2[0]};
-    }
-    result.untrim = function(t) { return this.left + t + this.right; };
-    return result;
-  }
-  
-  function inArray(array, item) {
-    for(var i=0,l=array.length;i<l;++i) {
-      if(array[i] === item) { 
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function getAtomIndex(templ) { return templ.substring(2, templ.length - 1); }
-
-  var s = code.replace(/\r\n?|\n\r/g, "\n"); // remove extra CR
-  var strings = [];
-
-  s = s.replace(/("(?:[^"\\\n]|\\.)*")|('(?:[^'\\\n]|\\.)*')|(([\[\(=|&!\^:?]\s*)(\/(?![*\/])(?:[^\/\\\n]|\\.)*\/[gim]*)\b)|(\/\/[^\n]*\n)|(\/\*(?:(?!\*\/)(?:.|\n))*\*\/)/g,
-  function(all, quoted, aposed, regexCtx, prefix, regex, singleComment, comment) {
-    var index;
-    if(quoted !== "" || aposed !== "") { // replace strings
-      index = strings.length; strings.push(all);
-      return "'" + index + "'";
-    } else if(regexCtx !== "") { // replace RegExps
-      index = strings.length; strings.push(regex);
-      return prefix + "'" + index + "'";
-    } else { // kill comments
-      return comment !== "" ? " " : "\n";
-    }
-  });
-
-  var atoms = splitToAtoms(s);
-  var replaceContext;
-  var declaredClasses = {}, currentClassId, classIdSeed = 0;
-
-  function addAtom(s, type) {
-    var lastIndex = atoms.length;
-    atoms.push(s);
-    return '"' + type + lastIndex + '"';
-  }
-
-  function generateClassId() {
-    return "class" + (++classIdSeed);
-  }
-
-  function appendClass(class_, classId, scopeId) {
-    class_.classId = classId;
-    class_.scopeId = scopeId;
-    declaredClasses[classId] = class_;
-  }
-
-  // function defined below
-  var transformClassBody, transformStatementsBlock, transformStatements, transformMain, transformExpression;
-
-  var classesRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)(class|interface)\s+([A-Za-z_$][\w$]*\b)(\s+extends\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*\b)?(\s+implements\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*,\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*\b)*)?\s*("A\d+")/g;
-  var methodsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:else|new|return|throw|function)\b)[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*,\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)*)?\s*("A\d+"|;)/g;
-  var fieldTest = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:else|new|return|throw)\b)[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*(?:"C\d+"\s*)*([=,]|$)/;
-  var cstrsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*,\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)*)?\s*("A\d+")/g;
-  var attrAndTypeRegex = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*"C\d+")*)\s*/;
-  var functionsRegex = /\bfunction(?:\s+([A-Za-z_$][\w$]*))?\s*("B\d+")\s*("A\d+")/g;
-
-  function extractClassesAndMethods(code) {
-    var s = code;
-    s = s.replace(classesRegex, function(all) {
-      return addAtom(all, 'E');
-    });
-    s = s.replace(methodsRegex, function(all) {
-      return addAtom(all, 'D');
-    });
-    s = s.replace(functionsRegex, function(all) {
-      return addAtom(all, 'H');
-    });
-    return s;
-  }
-
-  function extractConstructors(code, className) {
-    var s = code;
-    s = s.replace(cstrsRegex, function(all, attr, name, params, throws_, body) {
-      if(name !== className) {
-        return all;
-      } else {
-        return addAtom(all, 'G');
-      }
-    });
-    return s;
-  }
-
-  function AstParam(name) {
-    this.name = name;
-  }
-  AstParam.prototype.toString = function() {
-    return this.name;
-  };
-  function AstParams(params) {
-    this.params = params;
-  }
-  AstParams.prototype.getNames = function() {
-    var names = [];
-    for(var i=0,l=this.params.length;i<l;++i) {
-      names.push(this.params[i].name);
-    }
-    return names;
-  };
-  AstParams.prototype.toString = function() {
-    if(this.params.length === 0) {
-      return "()";
-    }
-    var s = "(";
-    for(var i=0,l=this.params.length;i<l;++i) {
-      s += this.params[i] + ", ";
-    }
-    return s.substring(0, s.length - 2) + ")";
-  };
-
-  function transformParams(params) {
-    var paramsWoPars = params.substring(1, params.length - 1).trim();
-    var result = [];
-    if(paramsWoPars !== "") {
-      var paramList = paramsWoPars.split(",");
-      for(var i=0; i < paramList.length; ++i) {
-        var param = /\b([A-Za-z_$][\w$]*\b)\s*$/.exec(paramList[i]);
-        result.push(new AstParam(param[1]));
-      }
-    }
-    return new AstParams(result);
-  }
-
-  function preExpressionTransform(expr) {
-    var s = expr;
-    // new type[] {...} --> {...}
-    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)(?:\s*"C\d+")+\s*("A\d+")/g, function(all, type, init) {
-      return init;
-    });
-    // new Runnable() {...} --> "F???"
-    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)(?:\s*"B\d+")\s*("A\d+")/g, function(all, type, init) {
-      return addAtom(all, 'F');
-    });
-    // function(...) { } --> "H???"
-    s = s.replace(functionsRegex, function(all) {
-      return addAtom(all, 'H');
-    });
-    // new type[?] --> new ArrayList(?)
-    s = s.replace(/\bnew\s+([A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)\s*("C\d+"(?:\s*"C\d+")*)/g, function(all, type, index) {
-      var args = index.replace(/"C(\d+)"/g, function(all, j) { return atoms[j]; }).
-        replace(/\[\s*\]/g, "[0]").replace(/\s*\]\s*\[\s*/g, ", ");
-
-      var arrayInitializer = "(" + args.substring(1, args.length - 1) + ")";
-      return 'new ArrayList' + addAtom(arrayInitializer, 'B');
-    });
-    // .length() --> .length
-    s = s.replace(/(\.\s*length)\s*"B\d+"/g, "$1");
-    // #000000 --> 0x000000
-    s = s.replace(/#([0-9A-Fa-f]+)/g, function(all, digits) {
-      return digits.length < 6 ? "0x" + digits : "0xFF000000".substring(0, 10 - digits.length) + digits;
-    });
-    // delete (type)???, (int)??? -> 0|???
-    s = s.replace(/"B(\d+)"(\s*[\w$']|"B)/g, function(all, index, next) {
-      var atom = atoms[index];
-      if(!/^\(\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*\s*(?:"C\d+"\s*)*\)$/.test(atom)) {
-        return all;
-      } else if(/^\(\s*int\s*\)$/.test(atom)) {
-        return "0|" + next;
-      } else {
-        var indexParts = atom.split(/"C(\d+)"/g);
-        if(indexParts.length > 1) {
-          // even items contains atom numbers, can check only first
-          if(! /^\[\s*\]$/.test(atoms[indexParts[1]])) {
-            return all; // fallback - not a cast
-          }
-        }
-        return "" + next;
-      }
-    });
-    // super() -> superMethod();
-    s = s.replace(/\bsuper(\s*"B\d+")/g, "superMethod$1");
-    // 3.0f -> 3.0
-    s = s.replace(/\b(\.?\d+)[fF]/g, "$1");
-    // Weird (?) parsing errors with %
-    s = s.replace(/([^\s])%([^=\s])/g, "$1 % $2");
-    // Since frameRate() and frameRate are different things,
-    // we need to differentiate them somehow. So when we parse
-    // the Processing.js source, replace frameRate so it isn't
-    // confused with frameRate().
-    s = s.replace(/\bframeRate(?!\s*"B)/, "p.FRAME_RATE");
-
-    return s;
-  }
-
-  function AstInlineClass(baseInterfaceName, body) {
-    this.baseInterfaceName = baseInterfaceName;
-    this.body = body;
-    body.owner = this;
-  }
-  AstInlineClass.prototype.toString = function() {
-    return "new (function() {\n" + this.body + "})";
-  };
-
-  function transformInlineClass(class_) {
-    var m = new RegExp(/\bnew\s*(Runnable)\s*"B\d+"\s*"A(\d+)"/).exec(class_);
-    if(m === null) {
-      return "undefined";
-    } else {
-      var oldClassId = currentClassId, newClassId = generateClassId();
-      currentClassId = newClassId;
-      // only Runnable supported
-      var inlineClass = new AstInlineClass("Runnable", transformClassBody(atoms[m[2]], m[1]));
-      appendClass(inlineClass, newClassId, oldClassId);
-
-      currentClassId = oldClassId;
-      return inlineClass;
-    }
-  }
-
-  function AstFunction(name, params, body) {
-    this.name = name;
-    this.params = params;
-    this.body = body;
-  }
-  AstFunction.prototype.toString = function() {
-    var oldContext = replaceContext; 
-    // saving "this." and parameters
-    var names = ["this"].concat(this.params.getNames());
-    replaceContext = function(name) {
-      return inArray(name) ? name : oldContext(name); 
-    };
-    var result = "function";
-    if(this.name) {
-      result += " " + this.name;
-    }
-    result += this.params + " " + this.body;
-    replaceContext = oldContext;
-    return result;
-  };
-
-  function transformFunction(class_) {
-    var m = new RegExp(/\b([A-Za-z_$][\w$]*)\s*"B(\d+)"\s*"A(\d+)"/).exec(class_);
-    return new AstFunction( m[1] !== "function" ? m[1] : undefined,
-      transformParams(atoms[m[2]]), transformStatementsBlock(atoms[m[3]]));
-  }
-
-  function AstInlineObject(members) {
-    this.members = members;
-  }
-  AstInlineObject.prototype.toString = function() {
-    var oldContext = replaceContext; 
-    replaceContext = function(name) {
-        return name === "this"? name : oldContext(name); // saving "this."
-    };
-    var s = "";
-    for(var i=0,l=this.members.length;i<l;++i) {
-      if(this.members[i].label) {
-        s += this.members[i].label + ": ";
-      }
-      s += this.members[i].value.toString() + ", ";
-    }
-    replaceContext = oldContext;
-    return s.substring(0, s.length - 2);
-  };
-
-  function transformInlineObject(obj) {
-    var members = obj.split(',');
-    for(var i=0; i < members.length; ++i) {
-      var label = members[i].indexOf(':');
-      if(label < 0) {
-        members[i] = { value: transformExpression(members[i]) };
-      } else {
-        members[i] = { label: members[i].substring(0, label).trim(),
-          value: transformExpression(members[i].substring(label + 1).trim()) };
-      }
-    }
-    return new AstInlineObject(members);
-  }
-
-  function expandExpression(expr) {
-    if(expr.charAt(0) === '(' || expr.charAt(0) === '[') {
-      return expr.charAt(0) + expandExpression(expr.substring(1, expr.length - 1)) + expr.charAt(expr.length - 1);
-    } else if(expr.charAt(0) === '{') {
-      if(/^\{\s*(?:[A-Za-z_$][\w$]*|'\d+')\s*:/.test(expr)) {
-        return "{" + addAtom(expr.substring(1, expr.length - 1), 'I') + "}";
-      } else {
-        return "[" + expandExpression(expr.substring(1, expr.length - 1)) + "]";
-      }
-    } else {
-      var trimmed = trimSpaces(expr);
-      var s = preExpressionTransform(trimmed.middle);
-      s = s.replace(/"[ABC](\d+)"/g, function(all, index) {
-        return expandExpression(atoms[index]);
-      });
-      return trimmed.untrim( s );
-    }
-  }
-
-  function replaceContextInVars(expr) {
-    return expr.replace(/(\.\s*)?(\b[A-Za-z_$][\w$]*\b)/g,
-      function(all, memberAccessSign, identifier) {
-        if(memberAccessSign) {
-          return all;
-        } else {
-          return replaceContext(identifier);
-        }
-      });
-  }
-
-  function AstExpression(expr, transforms) {
-    this.expr = expr;
-    this.transforms = transforms;
-  }
-  AstExpression.prototype.toString = function() {
-    var transforms = this.transforms;
-    var expr = replaceContextInVars(this.expr);
-    return expr.replace(/"!(\d+)"/g, function(all, index) {
-      return transforms[index].toString();
-    });
-  };
-
-  transformExpression = function(expr) {
-    var transforms = [];
-    var s = expandExpression(expr);
-    s = s.replace(/"H(\d+)"/g, function(all, index) {
-      transforms.push(transformFunction(atoms[index]));
-      return '"!' + (transforms.length - 1) + '"';
-    });
-    s = s.replace(/"F(\d+)"/g, function(all, index) {
-      transforms.push(transformInlineClass(atoms[index]));
-      return '"!' + (transforms.length - 1) + '"';
-    });
-    s = s.replace(/"I(\d+)"/g, function(all, index) {
-      transforms.push(transformInlineObject(atoms[index]));
-      return '"!' + (transforms.length - 1) + '"';
-    });
-
-    return new AstExpression(s, transforms);
-  };
-
-  function AstVarDefinition(name, value, isDefault) {
-    this.name = name;
-    this.value = value;
-    this.isDefault = isDefault;
-  }
-  AstVarDefinition.prototype.toString = function() {
-    return this.name + ' = ' + this.value;
-  };
-
-  function transformVarDefinition(def, defaultTypeValue) {
-    var eqIndex = def.indexOf("=");
-    var name, value, isDefault;
-    if(eqIndex < 0) {
-      name = def;
-      value = defaultTypeValue;
-      isDefault = true;
-    } else {
-      name = def.substring(0, eqIndex);
-      value = transformExpression(def.substring(eqIndex + 1));
-      isDefault = false;
-    }
-    return new AstVarDefinition(name.replace(/(\s*"C\d+")+/g, "").trim(),
-      value, isDefault);
-  }
-
-  function getDefaultValueForType(type) {
-      if(type === "int" || type === "float") {
-        return "0";
-      } else if(type === "boolean") {
-        return "false";
-      } else if(type === "color") {
-        return "0x00000000";
-      } else {
-        return "null";
-      }
-  }
-
-  function AstVar(definitions, varType) {
-    this.definitions = definitions;
-    this.varType = varType;
-  }
-  AstVar.prototype.getNames = function() {
-    var names = [];
-    for(var i=0,l=this.definitions.length;i<l;++i) {
-      names.push(this.definitions[i].name);
-    }
-    return names;
-  };
-  AstVar.prototype.toString = function() {
-    return "var " + this.definitions.join(",");
-  };
-  function AstStatement(expression) {
-    this.expression = expression;
-  }
-  AstStatement.prototype.toString = function() {
-    return this.expression.toString();
-  };
-
-  function transformStatement(statement) {
-    if(fieldTest.test(statement)) {
-      var attrAndType = attrAndTypeRegex.exec(statement);
-      var definitions = statement.substring(attrAndType[0].length).split(",");
-      var defaultTypeValue = getDefaultValueForType(attrAndType[2]);
-      for(var i=0; i < definitions.length; ++i) {
-        definitions[i] = transformVarDefinition(definitions[i], defaultTypeValue);
-      }
-      return new AstVar(definitions, attrAndType[2]);
-    } else {
-      return new AstStatement(transformExpression(statement));
-    }
-  }
-
-  function AstForExpression(initStatement, condition, step) {
-    this.initStatement = initStatement;
-    this.condition = condition;
-    this.step = step;
-  }
-  AstForExpression.prototype.toString = function() {
-    return "(" + this.initStatement + "; " + this.condition + "; " + this.step + ")";
-  };
-
-  function transformForExpression(expr) {
-    var content = expr.substring(1, expr.length - 1).split(";");
-    return new AstForExpression(transformStatement(content[0]),
-      transformExpression(content[1]), transformExpression(content[2]));
-  }
-
-  function AstInnerInterface(name) {
-    this.name = name;
-  }
-  AstInnerInterface.prototype.toString = function() {
-    return  "this." + this.name + " = function " + this.name + "() { "+
-      "throw 'This is an interface'; };";
-  };
-  function AstInnerClass(name, body) {
-    this.name = name;
-    this.body = body;
-    body.owner = this;
-  }
-  AstInnerClass.prototype.toString = function() {
-    return "this." + this.name + " = function " + this.name + "() {\n" +
-      this.body + "};";
-  };
-
-  function transformInnerClass(class_) {
-    var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
-    classesRegex.lastIndex = 0;
-    var body = atoms[getAtomIndex(m[6])];
-    if(m[2] === "interface") {
-      return new AstInnerInterface(m[3]);
-    } else {
-      var oldClassId = currentClassId, newClassId = generateClassId();
-      currentClassId = newClassId;
-      var innerClass = new AstInnerClass(m[3], transformClassBody(body, m[3], m[4], m[5]));
-      appendClass(innerClass, newClassId, oldClassId);
-      currentClassId = oldClassId;
-      return innerClass;
-    }
-  }
-
-  function AstClassMethod(name, params, body) {
-    this.name = name;
-    this.params = params;
-    this.body = body;
-  }
-  AstClassMethod.prototype.toString = function(){
-    var thisReplacement = replaceContext("this"), paramNames = this.params.getNames();
-    var oldContext = replaceContext;
-    replaceContext = function(name) {
-      return inArray(paramNames, name) ? name : oldContext(name);
-    };
-    var result = "processing.addMethod(" + thisReplacement + ", '" + this.name + "', function " + this.params + " " +
-      this.body +");";
-    replaceContext = oldContext;
-    return result;
-  };
-
-  function transformClassMethod(method) {
-    var m = methodsRegex.exec(method);
-    methodsRegex.lastIndex = 0;
-    return new AstClassMethod(m[3], transformParams(atoms[getAtomIndex(m[4])]),
-      transformStatementsBlock(atoms[getAtomIndex(m[6])]) );
-  }
-
-  function AstClassField(definitions, fieldType) {
-    this.definitions = definitions;
-    this.fieldType = fieldType;
-  }
-  AstClassField.prototype.getNames = function() {
-    var names = [];
-    for(var i=0,l=this.definitions.length;i<l;++i) {
-      names.push(this.definitions[i].name);
-    }
-    return names;
-  };
-  AstClassField.prototype.toString = function() {
-    var thisPrefix = replaceContext("this") + ".";
-    return thisPrefix + this.definitions.join("; " + thisPrefix);
-  };
-
-  function transformClassField(statement) {
-    var attrAndType = attrAndTypeRegex.exec(statement);
-    var definitions = statement.substring(attrAndType[0].length).split(/,\s*/g);
-    var defaultTypeValue = getDefaultValueForType(attrAndType[2]);
-    for(var i=0; i < definitions.length; ++i) {
-      definitions[i] = transformVarDefinition(definitions[i], defaultTypeValue);
-    }
-    return new AstClassField(definitions, attrAndType[2]);
-  }
-
-  function AstConstructor(params, body) {
-    this.params = params;
-    this.body = body;
-  }
-  AstConstructor.prototype.toString = function() {
-    var paramNames = this.params.getNames();
-    var oldContext = replaceContext;
-    replaceContext = function(name) {
-      return inArray(paramNames, name) ? name : oldContext(name);
-    };
-    var prefix = "function $constr_" + this.params.params.length + this.params + "{\n";
-    var body = this.body.toString();
-    if(!/\bsuperMethod\b/.test(body)) {
-      body = "superMethod();\n" + body;
-    }
-    replaceContext = oldContext;
-    return prefix + body + "}\n";
-  };
-
-  function transformConstructor(cstr) {
-    var m = new RegExp(/"B(\d+)"\s+"A(\d+)"/).exec(cstr);
-    var params = transformParams(atoms[m[1]]);
-
-    return new AstConstructor(params, transformStatementsBlock(atoms[m[2]]));
-  }
-
-  function AstClassBody(baseClassName, functions, methods, fields, cstrs, innerClasses, misc) {
-    this.baseClassName = baseClassName;
-    this.functions = functions;
-    this.methods = methods;
-    this.fields = fields;
-    this.cstrs = cstrs;
-    this.innerClasses = innerClasses;
-    this.misc = misc;
-  }
-  AstClassBody.prototype.getMembers = function() {
-    var members;
-    if(this.owner.base) {
-      members = this.owner.base.body.getMembers();     
-    } else {
-      members = { fields: [], methods: [], innerClasses: [] };
-    }
-    var i, j, l, m;
-    for(i=0,l=this.fields.length;i<l;++i) {
-      members.fields = members.fields.concat(this.fields[i].getNames());
-    }
-    for(i=0,l=this.methods.length;i<l;++i) {
-      var method = this.methods[i];
-      members.methods.push(method.name);
-    }
-    for(i=0,l=this.innerClasses.length;i<l;++i) {
-      var innerClass = this.innerClasses[i];
-      members.innerClasses.push(innerClass.name);
-    }
-    return members;
-  };
-  AstClassBody.prototype.toString = function() {
-    function getScopeLevel(p) {
-      var i = 0;
-      while(p) {
-        ++i;
-        p=p.scope;
-      }
-      return i;
-    }
-    
-    var scopeLevel = getScopeLevel(this.owner);
-    
-    var selfId = "$this_" + scopeLevel;
-    var s = "var " + selfId + " = this, $initMembers;\n";
-
-    var members = this.getMembers();
-    var thisClassNames = [].concat(members.fields, members.methods, members.innerClasses);
-    
-    var oldContext = replaceContext;
-    replaceContext = function(name) {
-      if(name === "this") {
-        return selfId;
-      } else if(inArray(thisClassNames, name)) {
-        return selfId + "." + name;
-      }
-      return oldContext(name);
-    };
-
-    if(this.baseClassName) {
-      s += "var $superProxy;\n";
-      s += "function superMethod(){ $superProxy = processing.extendClass(" + selfId + ",arguments," +
-        this.baseClassName + "); $initMembers(); }\n";
-    } else {
-      s += "function superMethod() { $initMembers(); }\n";
-    }
-
-    s += this.functions.join('\n') + '\n';
-    s += this.innerClasses.join('\n');
-
-    s += "$initMembers = function() {\n";
-    s += this.fields.join(";\n") + ";\n";
-    s += this.methods.join('\n') + '\n';
-    s += this.misc.tail;
-    s += "}\n";
-
-    s += this.cstrs.join('\n') + '\n';
-
-    var cstrsIfs = [];
-    for(var i=0,l=this.cstrs.length;i<l;++i) {
-      var paramsLength = this.cstrs[i].params.params.length;
-      // ??? will it be faster to expand to regular call, e.g. $constr_1(argument[0]);
-      cstrsIfs.push("if(arguments.length === " + paramsLength + ") {\n" +
-        "$constr_" + paramsLength + ".apply(this, arguments);\n}");
-    }
-    if(cstrsIfs.length > 0) {
-      s += cstrsIfs.join(" else ") + " else \n";
-    }
-    // ??? add check if length is 0, otherwise fail
-    s += " superMethod();\n";
-
-    replaceContext = oldContext;
-    return s;
-  };
-
-  transformClassBody = function(body, name, base, impls) {
-    var declarations = body.substring(1, body.length - 1);
-    declarations = extractClassesAndMethods(declarations);
-    declarations = extractConstructors(declarations, name);
-    var methods = [], classes = [], cstrs = [], functions = [];
-    declarations = declarations.replace(/"([DEGH])(\d+)"/g, function(all, type, index) {
-      if(type === 'D') { methods.push(index); }
-      else if(type === 'E') { classes.push(index); }
-      else if(type === 'H') { functions.push(index); }
-      else { cstrs.push(index); }
-      return "";
-    });
-    var fields = declarations.split(';');
-    var i, baseClassName;
-
-    if(base !== undefined) {
-      baseClassName = base.replace(/^\s*extends\s+([A-Za-z_$][\w$]*)\s*$/g, "$1");
-    }
-
-    for(i = 0; i < functions.length; ++i) {
-      functions[i] = transformFunction(atoms[functions[i]]);
-    }
-    for(i = 0; i < methods.length; ++i) {
-      methods[i] = transformClassMethod(atoms[methods[i]]);
-    }
-    for(i = 0; i < fields.length - 1; ++i) {
-      var field = trimSpaces(fields[i]);
-      fields[i] = transformClassField(field.middle);
-    }
-    var tail = fields.pop();
-    for(i = 0; i < cstrs.length; ++i) {
-      cstrs[i] = transformConstructor(atoms[cstrs[i]]);
-    }
-    for(i = 0; i < classes.length; ++i) {
-      classes[i] = transformInnerClass(atoms[classes[i]]);
-    }
-
-    return new AstClassBody(baseClassName, functions, methods, fields, cstrs,
-      classes, { tail: tail });
-  };
-
-  function AstInterface(name) {
-    this.name = name;
-  }
-  AstInterface.prototype.toString = function() {
-    return "function " + this.name + "() {  throw 'This is an interface'; }\n" +
-      "processing." + this.name + " = " + this.name + ";";
-  };
-  function AstClass(name, body) {
-    this.name = name;
-    this.body = body;
-    body.owner = this;
-  }
-  AstClass.prototype.toString = function() {
-    return "function " + this.name + "() {\n" + this.body + "}\n" +
-      "processing." + this.name + " = " + this.name + ";";
-  };
-
-
-  function transformGlobalClass(class_) {
-    var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
-    classesRegex.lastIndex = 0;
-    var body = atoms[getAtomIndex(m[6])];
-    if(m[2] === "interface") {
-      return new AstInterface(m[3]);
-    } else {
-      var oldClassId = currentClassId, newClassId = generateClassId();
-      currentClassId = newClassId;
-      var globalClass = new AstClass(m[3], transformClassBody(body, m[3], m[4], m[5]) );
-      appendClass(globalClass, newClassId, oldClassId);
-
-      currentClassId = oldClassId;
-      return globalClass;
-    }
-  }
-
-  function AstMethod(name, params, body) {
-    this.name = name;
-    this.params = params;
-    this.body = body;
-  }
-  AstMethod.prototype.toString = function(){
-    return "function " + this.name + this.params + " " + this.body + "\n" +
-      "processing." + this.name + " = " + this.name + ";";
-  };
-
-  function transformGlobalMethod(method) {
-    var m = methodsRegex.exec(method);
-    var result =
-    methodsRegex.lastIndex = 0;
-    return new AstMethod(m[3], transformParams(atoms[getAtomIndex(m[4])]),
-      transformStatementsBlock(atoms[getAtomIndex(m[6])]));
-  }
-
-  function preStatementsTransform(statements) {
-    var s = statements;
-    s = s.replace(/\b(catch\s*"B\d+"\s*"A\d+")(\s*catch\s*"B\d+"\s*"A\d+")+/g, "$1");
-    return s;
-  }
-
-  function AstForStatement(argument, misc) {
-    this.argument = argument;
-    this.misc = misc;
-  }
-  AstForStatement.prototype.toString = function() {
-    return this.misc.prefix + this.argument.toString();
-  };
-  function AstCatchStatement(argument, misc) {
-    this.argument = argument;
-    this.misc = misc;
-  }
-  AstCatchStatement.prototype.toString = function() {
-    return this.misc.prefix + this.argument.toString();
-  };
-  function AstPrefixStatement(name, argument, misc) {
-    this.name = name;
-    this.argument = argument;
-    this.misc = misc;
-  }
-  AstPrefixStatement.prototype.toString = function() {
-    var result = this.misc.prefix;
-    if(this.argument !== undefined) {
-      result += this.argument.toString();
-    }
-    return result;
-  };
-  function AstLabel(label) {
-    this.label = label;
-  }
-  AstLabel.prototype.toString = function() {
-    return this.label;
-  };
-
-  transformStatements = function(statements, transformMethod, transformClass) {
-    var nextStatement = new RegExp(/\b(catch|for|if|switch|while|with)\s*"B(\d+)"|\b(do|else|finally|return|throw|try|break|continue)\b|("[ADEH](\d+)")|\b((?:case\s[^:]+|[A-Za-z_$][\w$]*\s*):)|(;)/g);
-    var res = [];
-    statements = preStatementsTransform(statements);
-    var lastIndex = 0, m, space;
-    while((m = nextStatement.exec(statements)) !== null) {
-      if(m[1] !== undefined) { // catch, for ...
-        var i = statements.lastIndexOf('"B', nextStatement.lastIndex);
-        var statementsPrefix = statements.substring(lastIndex, i);
-        if(m[1] === "for") {
-          res.push(new AstForStatement(transformForExpression(atoms[m[2]]),
-            { prefix: statementsPrefix }) );
-        } else if(m[1] === "catch") {
-          res.push(new AstCatchStatement(transformParams(atoms[m[2]]),
-            { prefix: statementsPrefix }) );
-        } else {
-          res.push(new AstPrefixStatement(m[1], transformExpression(atoms[m[2]]),
-            { prefix: statementsPrefix }) );
-        }
-      } else if(m[3] !== undefined) { // do, else, ...
-          res.push(new AstPrefixStatement(m[3], undefined,
-            { prefix: statements.substring(lastIndex, nextStatement.lastIndex) }) );
-      } else if(m[4] !== undefined) { // block, class and methods
-        space = statements.substring(lastIndex, nextStatement.lastIndex - m[4].length);
-        if(space.trim().length !== 0) { continue; } // avoiding new type[] {} construct
-        res.push(space);
-        var kind = m[4].charAt(1), atomIndex = m[5];
-        if(kind === 'D') {
-          res.push(transformMethod(atoms[atomIndex]));
-        } else if(kind === 'E') {
-          res.push(transformClass(atoms[atomIndex]));
-        } else if(kind === 'H') {
-          res.push(transformFunction(atoms[atomIndex]));
-        } else {
-          res.push(transformStatementsBlock(atoms[atomIndex]));
-        }
-      } else if(m[6] !== undefined) { // label
-        space = statements.substring(lastIndex, nextStatement.lastIndex - m[6].length);
-        if(space.trim().length !== 0) { continue; } // avoiding ?: construct
-        res.push(new AstLabel(statements.substring(lastIndex, nextStatement.lastIndex)) );
-      } else { // semicolon
-        var statement = trimSpaces(statements.substring(lastIndex, nextStatement.lastIndex - 1));
-        res.push(statement.left);
-        res.push(transformStatement(statement.middle));
-        res.push(statement.right + ";");
-      }
-      lastIndex = nextStatement.lastIndex;
-    }
-    res.push(statements.substring(lastIndex));
-    return res;
-  };
-
-  function AstStatementsBlock(statements) {
-    this.statements = statements;
-  }
-  AstStatementsBlock.prototype.toString = function() {
-    var localNames = [];
-    for(var i=0,l=this.statements.length;i<l;++i) {
-      var statement = this.statements[i];
-      if(statement instanceof AstVar) {
-        localNames = localNames.concat(statement.getNames());
-      } else if(statement instanceof AstForStatement &&
-        statement.argument.initStatement instanceof AstVar) {
-        localNames = localNames.concat(statement.argument.initStatement.getNames());        
-      }
-    }
-    var oldContext = replaceContext;
-    replaceContext = function(name) {
-      return inArray(localNames, name) ? name : oldContext(name);
-    };
-    var result = "{\n" + this.statements.join('') + "\n}";
-    replaceContext = oldContext;
-    return result;
-  };
-
-  transformStatementsBlock = function(block) {
-    var content = trimSpaces(block.substring(1, block.length - 1));
-    return new AstStatementsBlock(transformStatements(content.middle));
-  };
-
-  function AstRoot(statements) {
-    this.statements = statements;
-  }
-  AstRoot.prototype.toString = function() {
-    replaceContext = function(name) {
-      if(name in globalMembers) {
-        return "processing." + name;
-      }
-      return name;
-    };
-    var result = "// this code was autogenerated from PJS\n" +
-      this.statements.join('') + "\n";
-    replaceContext = undefined;
-    return result;
-  };
-
-  transformMain = function() {
-    var statements = extractClassesAndMethods(atoms[0]);
-    statements = statements.replace(/\bimport\s+[^;]+;/g, "");
-    return new AstRoot( transformStatements(statements,
-      transformGlobalMethod, transformGlobalClass) );
-  };
-  
-  function generateMetadata(ast) {
-    var globalScope = {};
-    var id, class_;
-    for(id in declaredClasses) {
-      if(declaredClasses.hasOwnProperty(id)) {
-        class_ = declaredClasses[id];
-        var scopeId = class_.scopeId, name = class_.name;
-        if(scopeId) {
-          var scope = declaredClasses[scopeId];
-          class_.scope = scope;
-          if(scope.inScope === undefined) {
-            scope.inScope = {};
-          }
-          scope.inScope[name] = class_;
-        } else {
-          globalScope[name] = class_;
-        }
-      }
-    }
-    
-    function findInScopes(class_, name) {
-      var parts = name.split('.');
-      var currentScope = class_.scope, found;
-      while(currentScope) {
-        if(parts[0] in currentScope) {
-          found = currentScope[parts[0]]; break;
-        }
-        currentScope = currentScope.scope;
-      }
-      if(found === undefined) {
-        found = globalScope[parts[0]];
-      }
-      for(var i=1,l=parts.length;i<l && found;++i) {
-        found = found.inScope[parts[i]];
-      }
-      return found;
-    }
-    
-    for(id in declaredClasses) {
-      if(declaredClasses.hasOwnProperty(id)) {
-        class_ = declaredClasses[id];
-        if(class_.baseClassName) {
-          class_.base = findInScopes(class_, class_.baseClassName);
-        }
-      }
-    }
-  }
-
-  var transformed = transformMain();  
-  generateMetadata(transformed);
-
-  // remove empty extra lines with space
-  var redendered = transformed.toString();
-  redendered = redendered.replace(/\s*\n(?:[\t ]*\n)+/g, "\n\n");
-
-  return injectStrings(redendered, strings);
-}
-
-// Parser ends
-
   // Parse Processing (Java-like) syntax to JavaScript syntax by using "light-AST"
   Processing.parse = function parse(aCode, p) {
     p.pjs = {
@@ -3615,9 +2607,12 @@ function parseProcessing(code) {
 
       looping = window.setInterval(function() {
         try {
-          try {
-            p.focused = document.hasFocus();
-          } catch(e) {}
+          if(document.hasFocus) {
+            try {
+              p.focused = document.hasFocus();
+            } catch(e) {}
+          }
+                      
           p.redraw();
         } catch(e_loop) {
           window.clearInterval(looping);
@@ -7862,7 +6857,7 @@ function parseProcessing(code) {
             inSetup = false;
 
             if (processing.draw) {
-              if (!processing.doLoop) {
+              if (!doLoop) {
                 processing.redraw();
               } else {
                 processing.loop();
@@ -8105,5 +7100,1015 @@ function parseProcessing(code) {
 
     return p;
   };
+
+  // Processing global methods and constants for the parser
+  function getGlobalMembers() {
+    var names =
+  ["abs","acos","ADD","alpha","ALPHA","ALT","ambient","ambientLight","append","applyMatrix","arc",
+  "ARGB","arrayCopy","ArrayList","ARROW","asin","atan","atan2","background","BACKSPACE","beginCamera",
+  "beginDraw","beginShape","BEVEL","bezier","bezierPoint","bezierTangent","bezierVertex","binary",
+  "blend","BLEND","blendColor","blue","BLUE_MASK","boolean","box","BURN","byte","camera","ceil",
+  "CENTER","CENTER_RADIUS","char","clear","CLOSE","CMYK","CODED","color","colorMode","concat",
+  "console","constrain","CONTROL","copy","CORNER","CORNERS","cos","createFont","createGraphics",
+  "createImage","CROSS","cursor","curve","curveDetail","curvePoint","curveTangent","curveTightness",
+  "curveVertex","curveVertexSegment","DARKEST","day","defaultColor","degrees","DELETE","DIFFERENCE",
+  "directionalLight","disableContextMenu","dist","DODGE","DOWN","draw","ellipse","ellipseMode",
+  "emissive","enableContextMenu","endCamera","endDraw","endShape","ENTER","ESC","EXCLUSION",
+  "exit","exp","expand","fill","filter_bilinear","filter_new_scanline","float","floor","focused",
+  "frameCount","frameRate","FRAME_RATE","frustum","get","glyphLook","glyphTable","green",
+  "GREEN_MASK","HALF_PI","HAND","HARD_LIGHT","HashMap","height","hex","hour","HSB","image",
+  "imageMode","Import","int","intersect","join","key","keyPressed","keyReleased","LEFT","lerp",
+  "lerpColor","LIGHTEST","lightFalloff","lights","lightSpecular","line","LINES","link","loadBytes",
+  "loadFont","loadGlyphs","loadImage","loadPixels","loadStrings","log","loop","mag","map","match",
+  "matchAll","max","MAX_FLOAT","MAX_INT","MAX_LIGHTS","millis","min","MIN_FLOAT","MIN_INT","minute",
+  "MITER","mix","modelX","modelY","modelZ","modes","month","mouseButton","mouseClicked","mouseDown",
+  "mouseDragged","mouseMoved","mousePressed","mouseReleased","mouseScroll","mouseScrolled","mouseX",
+  "mouseY","MOVE","MULTIPLY","nf","nfc","nfp","nfs","noCursor","NOCURSOR","noFill","noise",
+  "noLights","noLoop","norm","normal","NORMAL_MODE_AUTO","NORMAL_MODE_SHAPE","NORMAL_MODE_VERTEX",
+  "noSmooth","noStroke","noTint","OPENGL","OVERLAY","P3D","peg","perspective","PI","PImage","pixels",
+  "pmouseX","pmouseY","point","Point","pointLight","POINTS","POLYGON","popMatrix","popStyle",
+  "pow","PREC_ALPHA_SHIFT","PRECISIONB","PRECISIONF","PREC_MAXVAL","PREC_RED_SHIFT","print",
+  "printCamera","println","printMatrix","printProjection","PROJECT","pushMatrix","pushStyle",
+  "PVector","quad","QUADS","QUAD_STRIP","radians","RADIUS","random","Random","randomSeed", "rect",
+  "rectMode","red","RED_MASK","redraw","REPLACE","requestImage","resetMatrix","RETURN","reverse","RGB",
+  "RIGHT","rotate","rotateX","rotateY","rotateZ","round","ROUND","save","scale","SCREEN",
+  "second","set","setup","shared","SHIFT","shininess","shorten","sin","SINCOS_LENGTH","size",
+  "smooth","SOFT_LIGHT","sort","specular","sphere","sphereDetail","splice","split","splitTokens",
+  "spotLight","sq","sqrt","SQUARE","str","stroke","strokeCap","strokeJoin","strokeWeight",
+  "subset","SUBTRACT","TAB","tan","text","TEXT","textAlign","textAscent","textDescent","textFont",
+  "textSize","textWidth","tint",
+  "translate","triangle","TRIANGLE_FAN","TRIANGLES","TRIANGLE_STRIP","trim","TWO_PI","unbinary",
+  "unhex","UP","updatePixels","use3DContext","vertex","WAIT","width","year"];
+    var members = {};
+    for(var i=0,l=names.length;i<l;++i) {
+      members[names[i]] = undefined;
+    }
+    return members;
+  }
+  var globalMembers = getGlobalMembers();
+
+
+  // Parser starts
+
+  function parseProcessing(code) {
+
+    function splitToAtoms(s) {
+      var atoms = [], stack = [];
+      var items = s.split(/([\{\[\(\)\]\}])/);
+      s = items[0];
+      for(var i=1; i < items.length; i += 2) {
+        var item = items[i];
+        if(item === '[' || item === '{' || item === '(') {
+          stack.push(s); s = item;
+        } else if(item === ']' || item === '}' || item === ')') {
+          var kind = item === '}' ? 'A' : item === ')' ? 'B' : 'C';
+          var index = atoms.length; atoms.push(s + item);
+          s = stack.pop() + '"' + kind + (index + 1) + '"';
+        }
+        s += items[i + 1];
+      }
+      atoms.unshift(s);
+      return atoms;
+    }
+
+    function injectStrings(s, strings) {
+      return s.replace(/'(\d+)'/g, function(all, index) {
+        var val = strings[index];
+        if(val.charAt(0) === "/") {
+          return val;
+        } else {
+          return (/^'((?:[^'\\\n])|(?:\\.[0-9A-Fa-f]*))'$/).test(val) ? "(new Char(" + val + "))" : val;
+        }
+      });
+    }
+
+    function trimSpaces(s) {
+      var m1 = /^\s*/.exec(s), result;
+      if(m1[0].length === s.length) {
+        result = {left: m1[0], middle: "", right: ""};
+      } else {
+        var m2 = /\s*$/.exec(s);
+        result = {left: m1[0], middle: s.substring(m1[0].length, m2.index), right: m2[0]};
+      }
+      result.untrim = function(t) { return this.left + t + this.right; };
+      return result;
+    }
+    
+    function inArray(array, item) {
+      for(var i=0,l=array.length;i<l;++i) {
+        if(array[i] === item) { 
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function getAtomIndex(templ) { return templ.substring(2, templ.length - 1); }
+
+    var s = code.replace(/\r\n?|\n\r/g, "\n"); // remove extra CR
+    var strings = [];
+
+    s = s.replace(/("(?:[^"\\\n]|\\.)*")|('(?:[^'\\\n]|\\.)*')|(([\[\(=|&!\^:?]\s*)(\/(?![*\/])(?:[^\/\\\n]|\\.)*\/[gim]*)\b)|(\/\/[^\n]*\n)|(\/\*(?:(?!\*\/)(?:.|\n))*\*\/)/g,
+    function(all, quoted, aposed, regexCtx, prefix, regex, singleComment, comment) {
+      var index;
+      if(quoted !== "" || aposed !== "") { // replace strings
+        index = strings.length; strings.push(all);
+        return "'" + index + "'";
+      } else if(regexCtx !== "") { // replace RegExps
+        index = strings.length; strings.push(regex);
+        return prefix + "'" + index + "'";
+      } else { // kill comments
+        return comment !== "" ? " " : "\n";
+      }
+    });
+
+    var atoms = splitToAtoms(s);
+    var replaceContext;
+    var declaredClasses = {}, currentClassId, classIdSeed = 0;
+
+    function addAtom(s, type) {
+      var lastIndex = atoms.length;
+      atoms.push(s);
+      return '"' + type + lastIndex + '"';
+    }
+
+    function generateClassId() {
+      return "class" + (++classIdSeed);
+    }
+
+    function appendClass(class_, classId, scopeId) {
+      class_.classId = classId;
+      class_.scopeId = scopeId;
+      declaredClasses[classId] = class_;
+    }
+
+    // function defined below
+    var transformClassBody, transformStatementsBlock, transformStatements, transformMain, transformExpression;
+
+    var classesRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)(class|interface)\s+([A-Za-z_$][\w$]*\b)(\s+extends\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*\b)?(\s+implements\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*,\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*\b)*)?\s*("A\d+")/g;
+    var methodsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:else|new|return|throw|function)\b)[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*,\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)*)?\s*("A\d+"|;)/g;
+    var fieldTest = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:else|new|return|throw)\b)[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*"C\d+")*)\s*([A-Za-z_$][\w$]*\b)\s*(?:"C\d+"\s*)*([=,]|$)/;
+    var cstrsRegex = /\b((?:(?:public|private|final|protected|static|abstract)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]*\b)\s*("B\d+")(\s*throws\s+[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*,\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)*)?\s*("A\d+")/g;
+    var attrAndTypeRegex = /^((?:(?:public|private|final|protected|static)\s+)*)((?!(?:new|return|throw)\b)[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*(?:\s*"C\d+")*)\s*/;
+    var functionsRegex = /\bfunction(?:\s+([A-Za-z_$][\w$]*))?\s*("B\d+")\s*("A\d+")/g;
+
+    function extractClassesAndMethods(code) {
+      var s = code;
+      s = s.replace(classesRegex, function(all) {
+        return addAtom(all, 'E');
+      });
+      s = s.replace(methodsRegex, function(all) {
+        return addAtom(all, 'D');
+      });
+      s = s.replace(functionsRegex, function(all) {
+        return addAtom(all, 'H');
+      });
+      return s;
+    }
+
+    function extractConstructors(code, className) {
+      var s = code;
+      s = s.replace(cstrsRegex, function(all, attr, name, params, throws_, body) {
+        if(name !== className) {
+          return all;
+        } else {
+          return addAtom(all, 'G');
+        }
+      });
+      return s;
+    }
+
+    function AstParam(name) {
+      this.name = name;
+    }
+    AstParam.prototype.toString = function() {
+      return this.name;
+    };
+    function AstParams(params) {
+      this.params = params;
+    }
+    AstParams.prototype.getNames = function() {
+      var names = [];
+      for(var i=0,l=this.params.length;i<l;++i) {
+        names.push(this.params[i].name);
+      }
+      return names;
+    };
+    AstParams.prototype.toString = function() {
+      if(this.params.length === 0) {
+        return "()";
+      }
+      var s = "(";
+      for(var i=0,l=this.params.length;i<l;++i) {
+        s += this.params[i] + ", ";
+      }
+      return s.substring(0, s.length - 2) + ")";
+    };
+
+    function transformParams(params) {
+      var paramsWoPars = params.substring(1, params.length - 1).trim();
+      var result = [];
+      if(paramsWoPars !== "") {
+        var paramList = paramsWoPars.split(",");
+        for(var i=0; i < paramList.length; ++i) {
+          var param = /\b([A-Za-z_$][\w$]*\b)\s*$/.exec(paramList[i]);
+          result.push(new AstParam(param[1]));
+        }
+      }
+      return new AstParams(result);
+    }
+
+    function preExpressionTransform(expr) {
+      var s = expr;
+      // new type[] {...} --> {...}
+      s = s.replace(/\bnew\s+([A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)(?:\s*"C\d+")+\s*("A\d+")/g, function(all, type, init) {
+        return init;
+      });
+      // new Runnable() {...} --> "F???"
+      s = s.replace(/\bnew\s+([A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)(?:\s*"B\d+")\s*("A\d+")/g, function(all, type, init) {
+        return addAtom(all, 'F');
+      });
+      // function(...) { } --> "H???"
+      s = s.replace(functionsRegex, function(all) {
+        return addAtom(all, 'H');
+      });
+      // new type[?] --> new ArrayList(?)
+      s = s.replace(/\bnew\s+([A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*)\s*("C\d+"(?:\s*"C\d+")*)/g, function(all, type, index) {
+        var args = index.replace(/"C(\d+)"/g, function(all, j) { return atoms[j]; }).
+          replace(/\[\s*\]/g, "[0]").replace(/\s*\]\s*\[\s*/g, ", ");
+
+        var arrayInitializer = "(" + args.substring(1, args.length - 1) + ")";
+        return 'new ArrayList' + addAtom(arrayInitializer, 'B');
+      });
+      // .length() --> .length
+      s = s.replace(/(\.\s*length)\s*"B\d+"/g, "$1");
+      // #000000 --> 0x000000
+      s = s.replace(/#([0-9A-Fa-f]+)/g, function(all, digits) {
+        return digits.length < 6 ? "0x" + digits : "0xFF000000".substring(0, 10 - digits.length) + digits;
+      });
+      // delete (type)???, (int)??? -> 0|???
+      s = s.replace(/"B(\d+)"(\s*[\w$']|"B)/g, function(all, index, next) {
+        var atom = atoms[index];
+        if(!/^\(\s*[A-Za-z_$][\w$]*\b(?:\s*\.\s*[A-Za-z_$][\w$]*\b)*\s*(?:"C\d+"\s*)*\)$/.test(atom)) {
+          return all;
+        } else if(/^\(\s*int\s*\)$/.test(atom)) {
+          return "0|" + next;
+        } else {
+          var indexParts = atom.split(/"C(\d+)"/g);
+          if(indexParts.length > 1) {
+            // even items contains atom numbers, can check only first
+            if(! /^\[\s*\]$/.test(atoms[indexParts[1]])) {
+              return all; // fallback - not a cast
+            }
+          }
+          return "" + next;
+        }
+      });
+      // super() -> superMethod();
+      s = s.replace(/\bsuper(\s*"B\d+")/g, "superMethod$1");
+      // 3.0f -> 3.0
+      s = s.replace(/\b(\.?\d+)[fF]/g, "$1");
+      // Weird (?) parsing errors with %
+      s = s.replace(/([^\s])%([^=\s])/g, "$1 % $2");
+      // Since frameRate() and frameRate are different things,
+      // we need to differentiate them somehow. So when we parse
+      // the Processing.js source, replace frameRate so it isn't
+      // confused with frameRate().
+      s = s.replace(/\bframeRate(?!\s*"B)/, "p.FRAME_RATE");
+
+      return s;
+    }
+
+    function AstInlineClass(baseInterfaceName, body) {
+      this.baseInterfaceName = baseInterfaceName;
+      this.body = body;
+      body.owner = this;
+    }
+    AstInlineClass.prototype.toString = function() {
+      return "new (function() {\n" + this.body + "})";
+    };
+
+    function transformInlineClass(class_) {
+      var m = new RegExp(/\bnew\s*(Runnable)\s*"B\d+"\s*"A(\d+)"/).exec(class_);
+      if(m === null) {
+        return "undefined";
+      } else {
+        var oldClassId = currentClassId, newClassId = generateClassId();
+        currentClassId = newClassId;
+        // only Runnable supported
+        var inlineClass = new AstInlineClass("Runnable", transformClassBody(atoms[m[2]], m[1]));
+        appendClass(inlineClass, newClassId, oldClassId);
+
+        currentClassId = oldClassId;
+        return inlineClass;
+      }
+    }
+
+    function AstFunction(name, params, body) {
+      this.name = name;
+      this.params = params;
+      this.body = body;
+    }
+    AstFunction.prototype.toString = function() {
+      var oldContext = replaceContext; 
+      // saving "this." and parameters
+      var names = ["this"].concat(this.params.getNames());
+      replaceContext = function(name) {
+        return inArray(name) ? name : oldContext(name); 
+      };
+      var result = "function";
+      if(this.name) {
+        result += " " + this.name;
+      }
+      result += this.params + " " + this.body;
+      replaceContext = oldContext;
+      return result;
+    };
+
+    function transformFunction(class_) {
+      var m = new RegExp(/\b([A-Za-z_$][\w$]*)\s*"B(\d+)"\s*"A(\d+)"/).exec(class_);
+      return new AstFunction( m[1] !== "function" ? m[1] : undefined,
+        transformParams(atoms[m[2]]), transformStatementsBlock(atoms[m[3]]));
+    }
+
+    function AstInlineObject(members) {
+      this.members = members;
+    }
+    AstInlineObject.prototype.toString = function() {
+      var oldContext = replaceContext; 
+      replaceContext = function(name) {
+          return name === "this"? name : oldContext(name); // saving "this."
+      };
+      var s = "";
+      for(var i=0,l=this.members.length;i<l;++i) {
+        if(this.members[i].label) {
+          s += this.members[i].label + ": ";
+        }
+        s += this.members[i].value.toString() + ", ";
+      }
+      replaceContext = oldContext;
+      return s.substring(0, s.length - 2);
+    };
+
+    function transformInlineObject(obj) {
+      var members = obj.split(',');
+      for(var i=0; i < members.length; ++i) {
+        var label = members[i].indexOf(':');
+        if(label < 0) {
+          members[i] = { value: transformExpression(members[i]) };
+        } else {
+          members[i] = { label: members[i].substring(0, label).trim(),
+            value: transformExpression(members[i].substring(label + 1).trim()) };
+        }
+      }
+      return new AstInlineObject(members);
+    }
+
+    function expandExpression(expr) {
+      if(expr.charAt(0) === '(' || expr.charAt(0) === '[') {
+        return expr.charAt(0) + expandExpression(expr.substring(1, expr.length - 1)) + expr.charAt(expr.length - 1);
+      } else if(expr.charAt(0) === '{') {
+        if(/^\{\s*(?:[A-Za-z_$][\w$]*|'\d+')\s*:/.test(expr)) {
+          return "{" + addAtom(expr.substring(1, expr.length - 1), 'I') + "}";
+        } else {
+          return "[" + expandExpression(expr.substring(1, expr.length - 1)) + "]";
+        }
+      } else {
+        var trimmed = trimSpaces(expr);
+        var s = preExpressionTransform(trimmed.middle);
+        s = s.replace(/"[ABC](\d+)"/g, function(all, index) {
+          return expandExpression(atoms[index]);
+        });
+        return trimmed.untrim( s );
+      }
+    }
+
+    function replaceContextInVars(expr) {
+      return expr.replace(/(\.\s*)?(\b[A-Za-z_$][\w$]*\b)/g,
+        function(all, memberAccessSign, identifier) {
+          if(memberAccessSign) {
+            return all;
+          } else {
+            return replaceContext(identifier);
+          }
+        });
+    }
+
+    function AstExpression(expr, transforms) {
+      this.expr = expr;
+      this.transforms = transforms;
+    }
+    AstExpression.prototype.toString = function() {
+      var transforms = this.transforms;
+      var expr = replaceContextInVars(this.expr);
+      return expr.replace(/"!(\d+)"/g, function(all, index) {
+        return transforms[index].toString();
+      });
+    };
+
+    transformExpression = function(expr) {
+      var transforms = [];
+      var s = expandExpression(expr);
+      s = s.replace(/"H(\d+)"/g, function(all, index) {
+        transforms.push(transformFunction(atoms[index]));
+        return '"!' + (transforms.length - 1) + '"';
+      });
+      s = s.replace(/"F(\d+)"/g, function(all, index) {
+        transforms.push(transformInlineClass(atoms[index]));
+        return '"!' + (transforms.length - 1) + '"';
+      });
+      s = s.replace(/"I(\d+)"/g, function(all, index) {
+        transforms.push(transformInlineObject(atoms[index]));
+        return '"!' + (transforms.length - 1) + '"';
+      });
+
+      return new AstExpression(s, transforms);
+    };
+
+    function AstVarDefinition(name, value, isDefault) {
+      this.name = name;
+      this.value = value;
+      this.isDefault = isDefault;
+    }
+    AstVarDefinition.prototype.toString = function() {
+      return this.name + ' = ' + this.value;
+    };
+
+    function transformVarDefinition(def, defaultTypeValue) {
+      var eqIndex = def.indexOf("=");
+      var name, value, isDefault;
+      if(eqIndex < 0) {
+        name = def;
+        value = defaultTypeValue;
+        isDefault = true;
+      } else {
+        name = def.substring(0, eqIndex);
+        value = transformExpression(def.substring(eqIndex + 1));
+        isDefault = false;
+      }
+      return new AstVarDefinition(name.replace(/(\s*"C\d+")+/g, "").trim(),
+        value, isDefault);
+    }
+
+    function getDefaultValueForType(type) {
+        if(type === "int" || type === "float") {
+          return "0";
+        } else if(type === "boolean") {
+          return "false";
+        } else if(type === "color") {
+          return "0x00000000";
+        } else {
+          return "null";
+        }
+    }
+
+    function AstVar(definitions, varType) {
+      this.definitions = definitions;
+      this.varType = varType;
+    }
+    AstVar.prototype.getNames = function() {
+      var names = [];
+      for(var i=0,l=this.definitions.length;i<l;++i) {
+        names.push(this.definitions[i].name);
+      }
+      return names;
+    };
+    AstVar.prototype.toString = function() {
+      return "var " + this.definitions.join(",");
+    };
+    function AstStatement(expression) {
+      this.expression = expression;
+    }
+    AstStatement.prototype.toString = function() {
+      return this.expression.toString();
+    };
+
+    function transformStatement(statement) {
+      if(fieldTest.test(statement)) {
+        var attrAndType = attrAndTypeRegex.exec(statement);
+        var definitions = statement.substring(attrAndType[0].length).split(",");
+        var defaultTypeValue = getDefaultValueForType(attrAndType[2]);
+        for(var i=0; i < definitions.length; ++i) {
+          definitions[i] = transformVarDefinition(definitions[i], defaultTypeValue);
+        }
+        return new AstVar(definitions, attrAndType[2]);
+      } else {
+        return new AstStatement(transformExpression(statement));
+      }
+    }
+
+    function AstForExpression(initStatement, condition, step) {
+      this.initStatement = initStatement;
+      this.condition = condition;
+      this.step = step;
+    }
+    AstForExpression.prototype.toString = function() {
+      return "(" + this.initStatement + "; " + this.condition + "; " + this.step + ")";
+    };
+
+    function transformForExpression(expr) {
+      var content = expr.substring(1, expr.length - 1).split(";");
+      return new AstForExpression(transformStatement(content[0]),
+        transformExpression(content[1]), transformExpression(content[2]));
+    }
+
+    function AstInnerInterface(name) {
+      this.name = name;
+    }
+    AstInnerInterface.prototype.toString = function() {
+      return  "this." + this.name + " = function " + this.name + "() { "+
+        "throw 'This is an interface'; };";
+    };
+    function AstInnerClass(name, body) {
+      this.name = name;
+      this.body = body;
+      body.owner = this;
+    }
+    AstInnerClass.prototype.toString = function() {
+      return "this." + this.name + " = function " + this.name + "() {\n" +
+        this.body + "};";
+    };
+
+    function transformInnerClass(class_) {
+      var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
+      classesRegex.lastIndex = 0;
+      var body = atoms[getAtomIndex(m[6])];
+      if(m[2] === "interface") {
+        return new AstInnerInterface(m[3]);
+      } else {
+        var oldClassId = currentClassId, newClassId = generateClassId();
+        currentClassId = newClassId;
+        var innerClass = new AstInnerClass(m[3], transformClassBody(body, m[3], m[4], m[5]));
+        appendClass(innerClass, newClassId, oldClassId);
+        currentClassId = oldClassId;
+        return innerClass;
+      }
+    }
+
+    function AstClassMethod(name, params, body) {
+      this.name = name;
+      this.params = params;
+      this.body = body;
+    }
+    AstClassMethod.prototype.toString = function(){
+      var thisReplacement = replaceContext("this"), paramNames = this.params.getNames();
+      var oldContext = replaceContext;
+      replaceContext = function(name) {
+        return inArray(paramNames, name) ? name : oldContext(name);
+      };
+      var result = "processing.addMethod(" + thisReplacement + ", '" + this.name + "', function " + this.params + " " +
+        this.body +");";
+      replaceContext = oldContext;
+      return result;
+    };
+
+    function transformClassMethod(method) {
+      var m = methodsRegex.exec(method);
+      methodsRegex.lastIndex = 0;
+      return new AstClassMethod(m[3], transformParams(atoms[getAtomIndex(m[4])]),
+        transformStatementsBlock(atoms[getAtomIndex(m[6])]) );
+    }
+
+    function AstClassField(definitions, fieldType) {
+      this.definitions = definitions;
+      this.fieldType = fieldType;
+    }
+    AstClassField.prototype.getNames = function() {
+      var names = [];
+      for(var i=0,l=this.definitions.length;i<l;++i) {
+        names.push(this.definitions[i].name);
+      }
+      return names;
+    };
+    AstClassField.prototype.toString = function() {
+      var thisPrefix = replaceContext("this") + ".";
+      return thisPrefix + this.definitions.join("; " + thisPrefix);
+    };
+
+    function transformClassField(statement) {
+      var attrAndType = attrAndTypeRegex.exec(statement);
+      var definitions = statement.substring(attrAndType[0].length).split(/,\s*/g);
+      var defaultTypeValue = getDefaultValueForType(attrAndType[2]);
+      for(var i=0; i < definitions.length; ++i) {
+        definitions[i] = transformVarDefinition(definitions[i], defaultTypeValue);
+      }
+      return new AstClassField(definitions, attrAndType[2]);
+    }
+
+    function AstConstructor(params, body) {
+      this.params = params;
+      this.body = body;
+    }
+    AstConstructor.prototype.toString = function() {
+      var paramNames = this.params.getNames();
+      var oldContext = replaceContext;
+      replaceContext = function(name) {
+        return inArray(paramNames, name) ? name : oldContext(name);
+      };
+      var prefix = "function $constr_" + this.params.params.length + this.params + "{\n";
+      var body = this.body.toString();
+      if(!/\bsuperMethod\b/.test(body)) {
+        body = "superMethod();\n" + body;
+      }
+      replaceContext = oldContext;
+      return prefix + body + "}\n";
+    };
+
+    function transformConstructor(cstr) {
+      var m = new RegExp(/"B(\d+)"\s+"A(\d+)"/).exec(cstr);
+      var params = transformParams(atoms[m[1]]);
+
+      return new AstConstructor(params, transformStatementsBlock(atoms[m[2]]));
+    }
+
+    function AstClassBody(baseClassName, functions, methods, fields, cstrs, innerClasses, misc) {
+      this.baseClassName = baseClassName;
+      this.functions = functions;
+      this.methods = methods;
+      this.fields = fields;
+      this.cstrs = cstrs;
+      this.innerClasses = innerClasses;
+      this.misc = misc;
+    }
+    AstClassBody.prototype.getMembers = function() {
+      var members;
+      if(this.owner.base) {
+        members = this.owner.base.body.getMembers();     
+      } else {
+        members = { fields: [], methods: [], innerClasses: [] };
+      }
+      var i, j, l, m;
+      for(i=0,l=this.fields.length;i<l;++i) {
+        members.fields = members.fields.concat(this.fields[i].getNames());
+      }
+      for(i=0,l=this.methods.length;i<l;++i) {
+        var method = this.methods[i];
+        members.methods.push(method.name);
+      }
+      for(i=0,l=this.innerClasses.length;i<l;++i) {
+        var innerClass = this.innerClasses[i];
+        members.innerClasses.push(innerClass.name);
+      }
+      return members;
+    };
+    AstClassBody.prototype.toString = function() {
+      function getScopeLevel(p) {
+        var i = 0;
+        while(p) {
+          ++i;
+          p=p.scope;
+        }
+        return i;
+      }
+      
+      var scopeLevel = getScopeLevel(this.owner);
+      
+      var selfId = "$this_" + scopeLevel;
+      var s = "var " + selfId + " = this, $initMembers;\n";
+
+      var members = this.getMembers();
+      var thisClassNames = [].concat(members.fields, members.methods, members.innerClasses);
+      
+      var oldContext = replaceContext;
+      replaceContext = function(name) {
+        if(name === "this") {
+          return selfId;
+        } else if(inArray(thisClassNames, name)) {
+          return selfId + "." + name;
+        }
+        return oldContext(name);
+      };
+
+      if(this.baseClassName) {
+        s += "var $superProxy;\n";
+        s += "function superMethod(){ $superProxy = processing.extendClass(" + selfId + ",arguments," +
+          this.baseClassName + "); $initMembers(); }\n";
+      } else {
+        s += "function superMethod() { $initMembers(); }\n";
+      }
+
+      s += this.functions.join('\n') + '\n';
+      s += this.innerClasses.join('\n');
+
+      s += "$initMembers = function() {\n";
+      s += this.fields.join(";\n") + ";\n";
+      s += this.methods.join('\n') + '\n';
+      s += this.misc.tail;
+      s += "}\n";
+
+      s += this.cstrs.join('\n') + '\n';
+
+      var cstrsIfs = [];
+      for(var i=0,l=this.cstrs.length;i<l;++i) {
+        var paramsLength = this.cstrs[i].params.params.length;
+        // ??? will it be faster to expand to regular call, e.g. $constr_1(argument[0]);
+        cstrsIfs.push("if(arguments.length === " + paramsLength + ") {\n" +
+          "$constr_" + paramsLength + ".apply(this, arguments);\n}");
+      }
+      if(cstrsIfs.length > 0) {
+        s += cstrsIfs.join(" else ") + " else \n";
+      }
+      // ??? add check if length is 0, otherwise fail
+      s += " superMethod();\n";
+
+      replaceContext = oldContext;
+      return s;
+    };
+
+    transformClassBody = function(body, name, base, impls) {
+      var declarations = body.substring(1, body.length - 1);
+      declarations = extractClassesAndMethods(declarations);
+      declarations = extractConstructors(declarations, name);
+      var methods = [], classes = [], cstrs = [], functions = [];
+      declarations = declarations.replace(/"([DEGH])(\d+)"/g, function(all, type, index) {
+        if(type === 'D') { methods.push(index); }
+        else if(type === 'E') { classes.push(index); }
+        else if(type === 'H') { functions.push(index); }
+        else { cstrs.push(index); }
+        return "";
+      });
+      var fields = declarations.split(';');
+      var i, baseClassName;
+
+      if(base !== undefined) {
+        baseClassName = base.replace(/^\s*extends\s+([A-Za-z_$][\w$]*)\s*$/g, "$1");
+      }
+
+      for(i = 0; i < functions.length; ++i) {
+        functions[i] = transformFunction(atoms[functions[i]]);
+      }
+      for(i = 0; i < methods.length; ++i) {
+        methods[i] = transformClassMethod(atoms[methods[i]]);
+      }
+      for(i = 0; i < fields.length - 1; ++i) {
+        var field = trimSpaces(fields[i]);
+        fields[i] = transformClassField(field.middle);
+      }
+      var tail = fields.pop();
+      for(i = 0; i < cstrs.length; ++i) {
+        cstrs[i] = transformConstructor(atoms[cstrs[i]]);
+      }
+      for(i = 0; i < classes.length; ++i) {
+        classes[i] = transformInnerClass(atoms[classes[i]]);
+      }
+
+      return new AstClassBody(baseClassName, functions, methods, fields, cstrs,
+        classes, { tail: tail });
+    };
+
+    function AstInterface(name) {
+      this.name = name;
+    }
+    AstInterface.prototype.toString = function() {
+      return "function " + this.name + "() {  throw 'This is an interface'; }\n" +
+        "processing." + this.name + " = " + this.name + ";";
+    };
+    function AstClass(name, body) {
+      this.name = name;
+      this.body = body;
+      body.owner = this;
+    }
+    AstClass.prototype.toString = function() {
+      return "function " + this.name + "() {\n" + this.body + "}\n" +
+        "processing." + this.name + " = " + this.name + ";";
+    };
+
+
+    function transformGlobalClass(class_) {
+      var m = classesRegex.exec(class_); // 1 - attr, 2 - class|int, 3 - name, 4 - extends, 5 - implements, 6 - body
+      classesRegex.lastIndex = 0;
+      var body = atoms[getAtomIndex(m[6])];
+      if(m[2] === "interface") {
+        return new AstInterface(m[3]);
+      } else {
+        var oldClassId = currentClassId, newClassId = generateClassId();
+        currentClassId = newClassId;
+        var globalClass = new AstClass(m[3], transformClassBody(body, m[3], m[4], m[5]) );
+        appendClass(globalClass, newClassId, oldClassId);
+
+        currentClassId = oldClassId;
+        return globalClass;
+      }
+    }
+
+    function AstMethod(name, params, body) {
+      this.name = name;
+      this.params = params;
+      this.body = body;
+    }
+    AstMethod.prototype.toString = function(){
+      return "function " + this.name + this.params + " " + this.body + "\n" +
+        "processing." + this.name + " = " + this.name + ";";
+    };
+
+    function transformGlobalMethod(method) {
+      var m = methodsRegex.exec(method);
+      var result =
+      methodsRegex.lastIndex = 0;
+      return new AstMethod(m[3], transformParams(atoms[getAtomIndex(m[4])]),
+        transformStatementsBlock(atoms[getAtomIndex(m[6])]));
+    }
+
+    function preStatementsTransform(statements) {
+      var s = statements;
+      s = s.replace(/\b(catch\s*"B\d+"\s*"A\d+")(\s*catch\s*"B\d+"\s*"A\d+")+/g, "$1");
+      return s;
+    }
+
+    function AstForStatement(argument, misc) {
+      this.argument = argument;
+      this.misc = misc;
+    }
+    AstForStatement.prototype.toString = function() {
+      return this.misc.prefix + this.argument.toString();
+    };
+    function AstCatchStatement(argument, misc) {
+      this.argument = argument;
+      this.misc = misc;
+    }
+    AstCatchStatement.prototype.toString = function() {
+      return this.misc.prefix + this.argument.toString();
+    };
+    function AstPrefixStatement(name, argument, misc) {
+      this.name = name;
+      this.argument = argument;
+      this.misc = misc;
+    }
+    AstPrefixStatement.prototype.toString = function() {
+      var result = this.misc.prefix;
+      if(this.argument !== undefined) {
+        result += this.argument.toString();
+      }
+      return result;
+    };
+    function AstLabel(label) {
+      this.label = label;
+    }
+    AstLabel.prototype.toString = function() {
+      return this.label;
+    };
+
+    transformStatements = function(statements, transformMethod, transformClass) {
+      var nextStatement = new RegExp(/\b(catch|for|if|switch|while|with)\s*"B(\d+)"|\b(do|else|finally|return|throw|try|break|continue)\b|("[ADEH](\d+)")|\b((?:case\s[^:]+|[A-Za-z_$][\w$]*\s*):)|(;)/g);
+      var res = [];
+      statements = preStatementsTransform(statements);
+      var lastIndex = 0, m, space;
+      while((m = nextStatement.exec(statements)) !== null) {
+        if(m[1] !== undefined) { // catch, for ...
+          var i = statements.lastIndexOf('"B', nextStatement.lastIndex);
+          var statementsPrefix = statements.substring(lastIndex, i);
+          if(m[1] === "for") {
+            res.push(new AstForStatement(transformForExpression(atoms[m[2]]),
+              { prefix: statementsPrefix }) );
+          } else if(m[1] === "catch") {
+            res.push(new AstCatchStatement(transformParams(atoms[m[2]]),
+              { prefix: statementsPrefix }) );
+          } else {
+            res.push(new AstPrefixStatement(m[1], transformExpression(atoms[m[2]]),
+              { prefix: statementsPrefix }) );
+          }
+        } else if(m[3] !== undefined) { // do, else, ...
+            res.push(new AstPrefixStatement(m[3], undefined,
+              { prefix: statements.substring(lastIndex, nextStatement.lastIndex) }) );
+        } else if(m[4] !== undefined) { // block, class and methods
+          space = statements.substring(lastIndex, nextStatement.lastIndex - m[4].length);
+          if(space.trim().length !== 0) { continue; } // avoiding new type[] {} construct
+          res.push(space);
+          var kind = m[4].charAt(1), atomIndex = m[5];
+          if(kind === 'D') {
+            res.push(transformMethod(atoms[atomIndex]));
+          } else if(kind === 'E') {
+            res.push(transformClass(atoms[atomIndex]));
+          } else if(kind === 'H') {
+            res.push(transformFunction(atoms[atomIndex]));
+          } else {
+            res.push(transformStatementsBlock(atoms[atomIndex]));
+          }
+        } else if(m[6] !== undefined) { // label
+          space = statements.substring(lastIndex, nextStatement.lastIndex - m[6].length);
+          if(space.trim().length !== 0) { continue; } // avoiding ?: construct
+          res.push(new AstLabel(statements.substring(lastIndex, nextStatement.lastIndex)) );
+        } else { // semicolon
+          var statement = trimSpaces(statements.substring(lastIndex, nextStatement.lastIndex - 1));
+          res.push(statement.left);
+          res.push(transformStatement(statement.middle));
+          res.push(statement.right + ";");
+        }
+        lastIndex = nextStatement.lastIndex;
+      }
+      res.push(statements.substring(lastIndex));
+      return res;
+    };
+
+    function AstStatementsBlock(statements) {
+      this.statements = statements;
+    }
+    AstStatementsBlock.prototype.toString = function() {
+      var localNames = [];
+      for(var i=0,l=this.statements.length;i<l;++i) {
+        var statement = this.statements[i];
+        if(statement instanceof AstVar) {
+          localNames = localNames.concat(statement.getNames());
+        } else if(statement instanceof AstForStatement &&
+          statement.argument.initStatement instanceof AstVar) {
+          localNames = localNames.concat(statement.argument.initStatement.getNames());        
+        }
+      }
+      var oldContext = replaceContext;
+      replaceContext = function(name) {
+        return inArray(localNames, name) ? name : oldContext(name);
+      };
+      var result = "{\n" + this.statements.join('') + "\n}";
+      replaceContext = oldContext;
+      return result;
+    };
+
+    transformStatementsBlock = function(block) {
+      var content = trimSpaces(block.substring(1, block.length - 1));
+      return new AstStatementsBlock(transformStatements(content.middle));
+    };
+
+    function AstRoot(statements) {
+      this.statements = statements;
+    }
+    AstRoot.prototype.toString = function() {
+      replaceContext = function(name) {
+        if(name in globalMembers) {
+          return "processing." + name;
+        }
+        return name;
+      };
+      var result = "// this code was autogenerated from PJS\n" +
+        this.statements.join('') + "\n";
+      replaceContext = undefined;
+      return result;
+    };
+
+    transformMain = function() {
+      var statements = extractClassesAndMethods(atoms[0]);
+      statements = statements.replace(/\bimport\s+[^;]+;/g, "");
+      return new AstRoot( transformStatements(statements,
+        transformGlobalMethod, transformGlobalClass) );
+    };
+    
+    function generateMetadata(ast) {
+      var globalScope = {};
+      var id, class_;
+      for(id in declaredClasses) {
+        if(declaredClasses.hasOwnProperty(id)) {
+          class_ = declaredClasses[id];
+          var scopeId = class_.scopeId, name = class_.name;
+          if(scopeId) {
+            var scope = declaredClasses[scopeId];
+            class_.scope = scope;
+            if(scope.inScope === undefined) {
+              scope.inScope = {};
+            }
+            scope.inScope[name] = class_;
+          } else {
+            globalScope[name] = class_;
+          }
+        }
+      }
+      
+      function findInScopes(class_, name) {
+        var parts = name.split('.');
+        var currentScope = class_.scope, found;
+        while(currentScope) {
+          if(parts[0] in currentScope) {
+            found = currentScope[parts[0]]; break;
+          }
+          currentScope = currentScope.scope;
+        }
+        if(found === undefined) {
+          found = globalScope[parts[0]];
+        }
+        for(var i=1,l=parts.length;i<l && found;++i) {
+          found = found.inScope[parts[i]];
+        }
+        return found;
+      }
+      
+      for(id in declaredClasses) {
+        if(declaredClasses.hasOwnProperty(id)) {
+          class_ = declaredClasses[id];
+          if(class_.baseClassName) {
+            class_.base = findInScopes(class_, class_.baseClassName);
+          }
+        }
+      }
+    }
+
+    var transformed = transformMain();  
+    generateMetadata(transformed);
+
+    // remove empty extra lines with space
+    var redendered = transformed.toString();
+    redendered = redendered.replace(/\s*\n(?:[\t ]*\n)+/g, "\n\n");
+
+    return injectStrings(redendered, strings);
+  }
+
+  // Parser ends
 
 }());
