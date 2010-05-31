@@ -1,26 +1,26 @@
 float[] obj = {1.0, 2.0 };
 
-HashMap map = new HashMap();
-map.put("test", "1");
-map.put("test2", obj);
+HashMap m = new HashMap();
+m.put("test", "1");
+m.put("test2", obj);
 
-_checkEqual(2, map.size());
-_checkFalse(map.isEmpty());
+_checkEqual(2, m.size());
+_checkFalse(m.isEmpty());
 
-_checkEqual("1", map.get("test"));
-_checkEqual(obj, map.get("test2"));
-_checkIsNull(map.get("test3"));
+_checkEqual("1", m.get("test"));
+_checkEqual(obj, m.get("test2"));
+_checkIsNull(m.get("test3"));
 
-map.remove("test");
-_checkEqual(1, map.size());
+m.remove("test");
+_checkEqual(1, m.size());
 
-map.remove("test");
-_checkEqual(1, map.size());
+m.remove("test");
+_checkEqual(1, m.size());
 
-map.clear();
-_checkEqual(0, map.size());
-_checkTrue(map.isEmpty());
+m.clear();
+_checkEqual(0, m.size());
+_checkTrue(m.isEmpty());
 
-map.put(map, map);
-_checkEqual(map, map.get(map));
+m.put(map, map);
+_checkEqual(map, m.get(map));
 

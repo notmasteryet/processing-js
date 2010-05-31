@@ -444,7 +444,7 @@
     aCode = parseProcessing(aCode);
     
     // Check if 3D context is invoked -- this is not the best way to do this.
-    if (aCode.match(/size\((?:.+),(?:.+),\s*(OPENGL|P3D)\s*\);/)) {
+    if (aCode.match(/\bsize\((?:.+),(?:.+),\s*processing.(OPENGL|P3D)\s*\);/)) {
       p.use3DContext = true;
     }
 
@@ -7140,17 +7140,25 @@
   "translate","triangle","TRIANGLE_FAN","TRIANGLES","TRIANGLE_STRIP","trim","TWO_PI","unbinary",
   "unhex","UP","updatePixels","use3DContext","vertex","WAIT","width","year"];
     var members = {};
-    for(var i=0,l=names.length;i<l;++i) {
+    var i, l;
+    for(i=0,l=names.length;i<l;++i) {
       members[names[i]] = undefined;
+    }
+    for(var lib in Processing.lib) {
+      if(Processing.lib[lib] && Processing.lib[lib].exports) {
+       var exportedNames = Processing.lib[lib].exports;
+       for(i=0,l=exportedNames.length;i<l;++i) {
+         members[exportedNames[i]] = undefined;
+       }
+      }
     }
     return members;
   }
-  var globalMembers = getGlobalMembers();
-
 
   // Parser starts
 
   function parseProcessing(code) {
+    var globalMembers = getGlobalMembers();
 
     function splitToAtoms(s) {
       var atoms = [], stack = [];
