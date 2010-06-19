@@ -30,6 +30,587 @@
     }
   };
 
+  var constants = {
+    // Color modes
+    RGB: 1,
+    ARGB: 2,
+    HSB : 3,
+    ALPHA : 4,
+    CMYK : 5,
+
+    // Renderers
+    P2D  : 1,
+    JAVA2D : 1,
+    WEBGL : 2,
+    P3D : 2,
+    OPENGL : 2,
+    EPSILON : 0.0001,
+    MAX_FLOAT : 3.4028235e+38,
+    MIN_FLOAT : -3.4028235e+38,
+    MAX_INT : 2147483647,
+    MIN_INT : -2147483648,
+    PI : Math.PI,
+    TWO_PI : 2 * Math.PI,
+    HALF_PI : Math.PI / 2,
+    THIRD_PI : Math.PI / 3,
+    QUARTER_PI : Math.PI / 4,
+    DEG_TO_RAD : Math.PI / 180,
+    RAD_TO_DEG : 180 / Math.PI,
+    WHITESPACE : " \t\n\r\f\u00A0",
+
+    // Filter/convert types
+    BLUR : 11,
+    GRAY : 12,
+    INVERT : 13,
+    OPAQUE : 14,
+    POSTERIZE : 15,
+    THRESHOLD : 16,
+    ERODE : 17,
+    DILATE : 18,
+
+    // Blend modes
+    REPLACE : 0,
+    BLEND : 1 << 0,
+    ADD : 1 << 1,
+    SUBTRACT : 1 << 2,
+    LIGHTEST : 1 << 3,
+    DARKEST : 1 << 4,
+    DIFFERENCE : 1 << 5,
+    EXCLUSION : 1 << 6,
+    MULTIPLY : 1 << 7,
+    SCREEN : 1 << 8,
+    OVERLAY : 1 << 9,
+    HARD_LIGHT : 1 << 10,
+    SOFT_LIGHT : 1 << 11,
+    DODGE : 1 << 12,
+    BURN : 1 << 13,
+
+    // Color component bit masks
+    ALPHA_MASK : 0xff000000,
+    RED_MASK : 0x00ff0000,
+    GREEN_MASK : 0x0000ff00,
+    BLUE_MASK : 0x000000ff,
+
+    // Projection matrices
+    CUSTOM : 0,
+    ORTHOGRAPHIC : 2,
+    PERSPECTIVE : 3,
+
+    // Shapes
+    POINT : 2,
+    POINTS : 2,
+    LINE : 4,
+    LINES : 4,
+    TRIANGLE : 8,
+    TRIANGLES : 9,
+    TRIANGLE_STRIP : 10,
+    TRIANGLE_FAN : 11,
+    QUAD : 16,
+    QUADS : 16,
+    QUAD_STRIP : 17,
+    POLYGON : 20,
+    PATH : 21,
+    RECT : 30,
+    ELLIPSE : 31,
+    ARC : 32,
+    SPHERE : 40,
+    BOX : 41,
+
+    // Shape closing modes
+    OPEN : 1,
+    CLOSE : 2,
+
+    // Shape drawing modes
+    CORNER : 0, // Draw mode convention to use (x, y) to (width, height)
+    CORNERS : 1, // Draw mode convention to use (x1, y1) to (x2, y2) coordinates
+    RADIUS : 2, // Draw mode from the center, and using the radius
+    CENTER_RADIUS : 2, // Deprecated! Use RADIUS instead
+    CENTER : 3, // Draw from the center, using second pair of values as the diameter
+    DIAMETER : 3, // Synonym for the CENTER constant. Draw from the center
+    CENTER_DIAMETER : 3, // Deprecated! Use DIAMETER instead
+
+    // Text vertical alignment modes
+    BASELINE : 0,   // Default vertical alignment for text placement
+    TOP : 101, // Align text to the top
+    BOTTOM : 102, // Align text from the bottom, using the baseline
+
+    // UV Texture coordinate modes
+    NORMAL : 1,
+    NORMALIZED : 1,
+    IMAGE : 2,
+
+    // Text placement modes
+    MODEL : 4,
+    SHAPE : 5,
+
+    // Stroke modes
+    SQUARE : 'butt',
+    ROUND : 'round',
+    PROJECT : 'square',
+    MITER : 'miter',
+    BEVEL : 'bevel',
+
+    // Lighting modes
+    AMBIENT   : 0,
+    DIRECTIONAL : 1,
+    //POINT : 2, Shared with Shape constant
+    SPOT : 3,
+
+    // Key constants
+
+    // Both key and keyCode will be equal to these values
+    BACKSPACE : 8,
+    TAB : 9,
+    ENTER : 10,
+    RETURN : 13,
+    ESC : 27,
+    DELETE : 127,
+    CODED : 0xffff,
+
+    // p.key will be CODED and p.keyCode will be this value
+    SHIFT : 16,
+    CONTROL : 17,
+    ALT : 18,
+    UP : 38,
+    RIGHT : 39,
+    DOWN : 40,
+    LEFT : 37,
+
+    // Cursor types
+    ARROW : 'default',
+    CROSS : 'crosshair',
+    HAND : 'pointer',
+    MOVE : 'move',
+    TEXT : 'text',
+    WAIT : 'wait',
+    NOCURSOR : "url('data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='), auto",
+
+    // Hints
+    DISABLE_OPENGL_2X_SMOOTH :  1,
+    ENABLE_OPENGL_2X_SMOOTH : -1,
+    ENABLE_OPENGL_4X_SMOOTH :  2,
+    ENABLE_NATIVE_FONTS :  3,
+    DISABLE_DEPTH_TEST :  4,
+    ENABLE_DEPTH_TEST : -4,
+    ENABLE_DEPTH_SORT : 5,
+    DISABLE_DEPTH_SORT : -5,
+    DISABLE_OPENGL_ERROR_REPORT : 6,
+    ENABLE_OPENGL_ERROR_REPORT : -6,
+    ENABLE_ACCURATE_TEXTURES :  7,
+    DISABLE_ACCURATE_TEXTURES : -7,
+    HINT_COUNT : 10,
+
+    // PJS defined constants
+    SINCOS_LENGTH : parseInt(360 / 0.5, 10),
+    PRECISIONB : 15, // fixed point precision is limited to 15 bits!!
+    PRECISIONF : 1 << /* PRECISIONB */ 15,
+    PREC_MAXVAL : /* PRECISIONF */ (1 << 15) - 1,
+    PREC_ALPHA_SHIFT : 24 - /* PRECISIONB */ 15,
+    PREC_RED_SHIFT : 16 - /* PRECISIONB */ 15,
+    NORMAL_MODE_AUTO : 0,
+    NORMAL_MODE_SHAPE : 1,
+    NORMAL_MODE_VERTEX : 2,
+    MAX_LIGHTS : 8
+  };
+
+  function createDefaultScope() {
+    var scope = {};
+
+    ////////////////////////////////////////////////////////////////////////////
+    // ArrayList
+    ////////////////////////////////////////////////////////////////////////////
+
+    var ArrayList = scope.ArrayList = function() {
+      var createArrayList = function(args){
+        var array = [];
+        for (var i = 0; i < args[0]; i++){
+          array[i] = (args.length > 1 ? createArrayList(args.slice(1)) : 0 );
+        }
+
+        array.get = function(i) {
+          return this[i];
+        };
+        array.contains = function(item) {
+          return this.indexOf(item) !== -1;
+        };
+        array.add = function(item) {
+          return this.push(item);
+        };
+        array.size = function() {
+          return this.length;
+        };
+        array.clear = function() {
+          this.length = 0;
+        };
+        array.remove = function(i) {
+          return this.splice(i, 1)[0];
+        };
+        array.isEmpty = function() {
+          return !this.length;
+        };
+        array.clone = function() {
+          return this.slice(0);
+        };
+        array.toArray = function() {
+          return this.slice(0);
+        };
+
+        return array;
+      };
+      return createArrayList(Array.prototype.slice.call(arguments));
+    };
+
+    ////////////////////////////////////////////////////////////////////////////
+    // HashMap
+    ////////////////////////////////////////////////////////////////////////////
+
+    var virtHashCode = function virtHashCode(obj) {
+      if (obj.constructor === String) {
+        var hash = 0;
+        for (var i = 0; i < obj.length; ++i) {
+          hash = (hash * 31 + obj.charCodeAt(i)) & 0xFFFFFFFF;
+        }
+        return hash;
+      } else if (typeof(obj) !== "object") {
+        return obj & 0xFFFFFFFF;
+      } else if ("hashCode" in obj) {
+        return obj.hashCode.call(obj);
+      } else {
+        if (obj.$id === undefined) {
+          obj.$id = ((Math.floor(Math.random() * 0x10000) - 0x8000) << 16) | Math.floor(Math.random() * 0x10000);
+        }
+        return obj.$id;
+      }
+    };
+
+    var virtEquals = function virtEquals(obj, other) {
+      if (obj === null || other === null) {
+        return (obj === null) && (other === null);
+      } else if (obj.constructor === String) {
+        return obj === other;
+      } else if (typeof(obj) !== "object") {
+        return obj === other;
+      } else if ("equals" in obj) {
+        return obj.equals.call(obj, other);
+      } else {
+        return obj === other;
+      }
+    };
+
+    var HashMap = scope.HashMap = function HashMap() {
+      if (arguments.length === 1 && arguments[0].constructor === HashMap) {
+        return arguments[0].clone();
+      }
+
+      var initialCapacity = arguments.length > 0 ? arguments[0] : 16;
+      var loadFactor = arguments.length > 1 ? arguments[1] : 0.75;
+
+      var buckets = new Array(initialCapacity);
+      var count = 0;
+      var hashMap = this;
+
+      function ensureLoad() {
+        if (count <= loadFactor * buckets.length) {
+          return;
+        }
+        var allEntries = [];
+        for (var i = 0; i < buckets.length; ++i) {
+          if (buckets[i] !== undefined) {
+            allEntries = allEntries.concat(buckets[i]);
+          }
+        }
+        buckets = new Array(buckets.length * 2);
+        for (var j = 0; j < allEntries.length; ++j) {
+          var index = virtHashCode(allEntries[j].key) % buckets.length;
+          var bucket = buckets[index];
+          if (bucket === undefined) {
+            buckets[index] = bucket = [];
+          }
+          bucket.push(allEntries[j]);
+        }
+      }
+
+      function Iterator(conversion, removeItem) {
+        var bucketIndex = 0;
+        var itemIndex = -1;
+        var endOfBuckets = false;
+
+        function findNext() {
+          while (!endOfBuckets) {
+            ++itemIndex;
+            if (bucketIndex >= buckets.length) {
+              endOfBuckets = true;
+            } else if (typeof(buckets[bucketIndex]) === 'undefined' || itemIndex >= buckets[bucketIndex].length) {
+              itemIndex = -1;
+              ++bucketIndex;
+            } else {
+              return;
+            }
+          }
+        }
+
+        this.hasNext = function() {
+          return !endOfBuckets;
+        };
+        this.next = function() {
+          var result = conversion(buckets[bucketIndex][itemIndex]);
+          findNext();
+          return result;
+        };
+        this.remove = function() {
+          removeItem(this.next());
+          --itemIndex;
+        };
+
+        findNext();
+      }
+
+      function Set(conversion, isIn, removeItem) {
+        this.clear = function() {
+          hashMap.clear();
+        };
+        this.contains = function(o) {
+          return isIn(o);
+        };
+        this.containsAll = function(o) {
+          var it = o.iterator();
+          while (it.hasNext()) {
+            if (!this.contains(it.next())) {
+              return false;
+            }
+          }
+          return true;
+        };
+        this.isEmpty = function() {
+          return hashMap.isEmpty();
+        };
+        this.iterator = function() {
+          return new Iterator(conversion, removeItem);
+        };
+        this.remove = function(o) {
+          if (this.contains(o)) {
+            removeItem(o);
+            return true;
+          }
+          return false;
+        };
+        this.removeAll = function(c) {
+          var it = c.iterator();
+          var changed = false;
+          while (it.hasNext()) {
+            var item = it.next();
+            if (this.contains(item)) {
+              removeItem(item);
+              changed = true;
+            }
+          }
+          return true;
+        };
+        this.retainAll = function(c) {
+          var it = this.iterator();
+          var toRemove = [];
+          while (it.hasNext()) {
+            var entry = it.next();
+            if (!c.contains(entry)) {
+              toRemove.push(entry);
+            }
+          }
+          for (var i = 0; i < toRemove.length; ++i) {
+            removeItem(toRemove[i]);
+          }
+          return toRemove.length > 0;
+        };
+        this.size = function() {
+          return hashMap.size();
+        };
+        this.toArray = function() {
+          var result = new ArrayList(0);
+          var it = this.iterator();
+          while (it.hasNext()) {
+            result.push(it.next());
+          }
+          return result;
+        };
+      }
+
+      function Entry(pair) {
+        this._isIn = function(map) {
+          return map === hashMap && (typeof(pair.removed) === 'undefined');
+        };
+        this.equals = function(o) {
+          return virtEquals(pair.key, o.getKey());
+        };
+        this.getKey = function() {
+          return pair.key;
+        };
+        this.getValue = function() {
+          return pair.value;
+        };
+        this.hashCode = function(o) {
+          return virtHashCode(pair.key);
+        };
+        this.setValue = function(value) {
+          var old = pair.value;
+          pair.value = value;
+          return old;
+        };
+      }
+
+      this.clear = function() {
+        count = 0;
+        buckets = new Array(initialCapacity);
+      };
+      this.clone = function() {
+        var map = new HashMap();
+        map.putAll(this);
+        return map;
+      };
+      this.containsKey = function(key) {
+        var index = virtHashCode(key) % buckets.length;
+        var bucket = buckets[index];
+        if (bucket === undefined) {
+          return false;
+        }
+        for (var i = 0; i < bucket.length; ++i) {
+          if (virtEquals(bucket[i].key, key)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      this.containsValue = function(value) {
+        for (var i = 0; i < buckets.length; ++i) {
+          var bucket = buckets[i];
+          if (bucket === undefined) {
+            continue;
+          }
+          for (var j = 0; j < bucket.length; ++j) {
+            if (virtEquals(bucket[j].value, value)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+      this.entrySet = function() {
+        return new Set(
+
+        function(pair) {
+          return new Entry(pair);
+        },
+
+        function(pair) {
+          return pair.constructor === Entry && pair._isIn(hashMap);
+        },
+
+        function(pair) {
+          return hashMap.remove(pair.getKey());
+        });
+      };
+      this.get = function(key) {
+        var index = virtHashCode(key) % buckets.length;
+        var bucket = buckets[index];
+        if (bucket === undefined) {
+          return null;
+        }
+        for (var i = 0; i < bucket.length; ++i) {
+          if (virtEquals(bucket[i].key, key)) {
+            return bucket[i].value;
+          }
+        }
+        return null;
+      };
+      this.isEmpty = function() {
+        return count === 0;
+      };
+      this.keySet = function() {
+        return new Set(
+
+        function(pair) {
+          return pair.key;
+        },
+
+        function(key) {
+          return hashMap.containsKey(key);
+        },
+
+        function(key) {
+          return hashMap.remove(key);
+        });
+      };
+      this.put = function(key, value) {
+        var index = virtHashCode(key) % buckets.length;
+        var bucket = buckets[index];
+        if (bucket === undefined) {
+          ++count;
+          buckets[index] = [{
+            key: key,
+            value: value
+          }];
+          ensureLoad();
+          return null;
+        }
+        for (var i = 0; i < bucket.length; ++i) {
+          if (virtEquals(bucket[i].key, key)) {
+            var previous = bucket[i].value;
+            bucket[i].value = value;
+            return previous;
+          }
+        }++count;
+        bucket.push({
+          key: key,
+          value: value
+        });
+        ensureLoad();
+        return null;
+      };
+      this.putAll = function(m) {
+        var it = m.entrySet().iterator();
+        while (it.hasNext()) {
+          var entry = it.next();
+          this.put(entry.getKey(), entry.getValue());
+        }
+      };
+      this.remove = function(key) {
+        var index = virtHashCode(key) % buckets.length;
+        var bucket = buckets[index];
+        if (bucket === undefined) {
+          return null;
+        }
+        for (var i = 0; i < bucket.length; ++i) {
+          if (virtEquals(bucket[i].key, key)) {
+            --count;
+            var previous = bucket[i].value;
+            bucket[i].removed = true;
+            if (bucket.length > 1) {
+              bucket.splice(i, 1);
+            } else {
+              buckets[index] = undefined;
+            }
+            return previous;
+          }
+        }
+        return null;
+      };
+      this.size = function() {
+        return count;
+      };
+      this.values = function() {
+        var result = new ArrayList(0);
+        var it = this.entrySet().iterator();
+        while (it.hasNext()) {
+          var entry = it.next();
+          result.push(entry.getValue());
+        }
+        return result;
+      };
+    };
+
+    return scope;
+  }
+
+  var defaultScope = createDefaultScope();
+
   var Processing = this.Processing = function Processing(curElement, aCode) {
 
     var p = this;
@@ -44,6 +625,13 @@
     p.name = 'Processing.js Instance'; // Set Processing defaults / environment variables
     p.use3DContext = false; // default '2d' canvas context
     p.canvas = curElement;
+
+    // Copy contants
+    for(var constName in constants) {
+      if(constants.hasOwnProperty(constName)) {
+        p[constName] = constants[constName];
+      }
+    }
 
     // Glyph path storage for textFonts
     p.glyphTable = {};
@@ -83,188 +671,7 @@
     p.width = curElement.width - 0;
     p.height = curElement.height - 0;
 
-    // Color modes
-    p.RGB   = 1;
-    p.ARGB  = 2;
-    p.HSB   = 3;
-    p.ALPHA = 4;
-    p.CMYK  = 5;
-
-    // Renderers
-    p.P2D    = 1;
-    p.JAVA2D = 1;
-    p.WEBGL  = 2;
-    p.P3D    = 2;
-    p.OPENGL = 2;
-    p.EPSILON = 0.0001;
-    p.MAX_FLOAT   = 3.4028235e+38;
-    p.MIN_FLOAT   = -3.4028235e+38;
-    p.MAX_INT     = 2147483647;
-    p.MIN_INT     = -2147483648;
-    p.PI          = Math.PI;
-    p.TWO_PI      = 2 * p.PI;
-    p.HALF_PI     = p.PI / 2;
-    p.THIRD_PI    = p.PI / 3;
-    p.QUARTER_PI  = p.PI / 4;
-    p.DEG_TO_RAD  = p.PI / 180;
-    p.RAD_TO_DEG  = 180 / p.PI;
-    p.WHITESPACE  = " \t\n\r\f\u00A0";
-
-    // Filter/convert types
-    p.BLUR      = 11;
-    p.GRAY      = 12;
-    p.INVERT    = 13;
-    p.OPAQUE    = 14;
-    p.POSTERIZE = 15;
-    p.THRESHOLD = 16;
-    p.ERODE     = 17;
-    p.DILATE    = 18;
-
-    // Blend modes
-    p.REPLACE    = 0;
-    p.BLEND      = 1 << 0;
-    p.ADD        = 1 << 1;
-    p.SUBTRACT   = 1 << 2;
-    p.LIGHTEST   = 1 << 3;
-    p.DARKEST    = 1 << 4;
-    p.DIFFERENCE = 1 << 5;
-    p.EXCLUSION  = 1 << 6;
-    p.MULTIPLY   = 1 << 7;
-    p.SCREEN     = 1 << 8;
-    p.OVERLAY    = 1 << 9;
-    p.HARD_LIGHT = 1 << 10;
-    p.SOFT_LIGHT = 1 << 11;
-    p.DODGE      = 1 << 12;
-    p.BURN       = 1 << 13;
-
-    // Color component bit masks
-    p.ALPHA_MASK = 0xff000000;
-    p.RED_MASK   = 0x00ff0000;
-    p.GREEN_MASK = 0x0000ff00;
-    p.BLUE_MASK  = 0x000000ff;
-
-    // Projection matrices
-    p.CUSTOM       = 0;
-    p.ORTHOGRAPHIC = 2;
-    p.PERSPECTIVE  = 3;
-
-    // Shapes
-    p.POINT          = 2;
-    p.POINTS         = 2;
-    p.LINE           = 4;
-    p.LINES          = 4;
-    p.TRIANGLE       = 8;
-    p.TRIANGLES      = 9;
-    p.TRIANGLE_STRIP = 10;
-    p.TRIANGLE_FAN   = 11;
-    p.QUAD           = 16;
-    p.QUADS          = 16;
-    p.QUAD_STRIP     = 17;
-    p.POLYGON        = 20;
-    p.PATH           = 21;
-    p.RECT           = 30;
-    p.ELLIPSE        = 31;
-    p.ARC            = 32;
-    p.SPHERE         = 40;
-    p.BOX            = 41;
-
-    // Shape closing modes
-    p.OPEN  = 1;
-    p.CLOSE = 2;
-
-    // Shape drawing modes
-    p.CORNER          = 0; // Draw mode convention to use (x, y) to (width, height)
-    p.CORNERS         = 1; // Draw mode convention to use (x1, y1) to (x2, y2) coordinates
-    p.RADIUS          = 2; // Draw mode from the center, and using the radius
-    p.CENTER_RADIUS   = 2; // Deprecated! Use RADIUS instead
-    p.CENTER          = 3; // Draw from the center, using second pair of values as the diameter
-    p.DIAMETER        = 3; // Synonym for the CENTER constant. Draw from the center
-    p.CENTER_DIAMETER = 3; // Deprecated! Use DIAMETER instead
-
-    // Text vertical alignment modes
-    p.BASELINE = 0;   // Default vertical alignment for text placement
-    p.TOP      = 101; // Align text to the top
-    p.BOTTOM   = 102; // Align text from the bottom, using the baseline
-
-    // UV Texture coordinate modes
-    p.NORMAL     = 1;
-    p.NORMALIZED = 1;
-    p.IMAGE      = 2;
-
-    // Text placement modes
-    p.MODEL = 4;
-    p.SHAPE = 5;
-
-    // Stroke modes
-    p.SQUARE  = 'butt';
-    p.ROUND   = 'round';
-    p.PROJECT = 'square';
-    p.MITER   = 'miter';
-    p.BEVEL   = 'bevel';
-
-    // Lighting modes
-    p.AMBIENT     = 0;
-    p.DIRECTIONAL = 1;
-    //POINT       = 2; Shared with Shape constant
-    p.SPOT        = 3;
-
-    // Key constants
-
-    // Both key and keyCode will be equal to these values
-    p.BACKSPACE = 8;
-    p.TAB       = 9;
-    p.ENTER     = 10;
-    p.RETURN    = 13;
-    p.ESC       = 27;
-    p.DELETE    = 127;
-    p.CODED     = 0xffff;
-
-    // p.key will be CODED and p.keyCode will be this value
-    p.SHIFT     = 16;
-    p.CONTROL   = 17;
-    p.ALT       = 18;
-    p.UP        = 38;
-    p.RIGHT     = 39;
-    p.DOWN      = 40;
-    p.LEFT      = 37;
-
     var codedKeys = [p.SHIFT, p.CONTROL, p.ALT, p.UP, p.RIGHT, p.DOWN, p.LEFT];
-
-    // Cursor types
-    p.ARROW    = 'default';
-    p.CROSS    = 'crosshair';
-    p.HAND     = 'pointer';
-    p.MOVE     = 'move';
-    p.TEXT     = 'text';
-    p.WAIT     = 'wait';
-    p.NOCURSOR = "url('data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='), auto";
-
-    // Hints
-    p.DISABLE_OPENGL_2X_SMOOTH    =  1;
-    p.ENABLE_OPENGL_2X_SMOOTH     = -1;
-    p.ENABLE_OPENGL_4X_SMOOTH     =  2;
-    p.ENABLE_NATIVE_FONTS         =  3;
-    p.DISABLE_DEPTH_TEST          =  4;
-    p.ENABLE_DEPTH_TEST           = -4;
-    p.ENABLE_DEPTH_SORT           =  5;
-    p.DISABLE_DEPTH_SORT          = -5;
-    p.DISABLE_OPENGL_ERROR_REPORT =  6;
-    p.ENABLE_OPENGL_ERROR_REPORT  = -6;
-    p.ENABLE_ACCURATE_TEXTURES    =  7;
-    p.DISABLE_ACCURATE_TEXTURES   = -7;
-    p.HINT_COUNT                  = 10;
-
-    // PJS defined constants
-    p.SINCOS_LENGTH      = parseInt(360 / 0.5, 10);
-    p.PRECISIONB         = 15; // fixed point precision is limited to 15 bits!!
-    p.PRECISIONF         = 1 << p.PRECISIONB;
-    p.PREC_MAXVAL        = p.PRECISIONF - 1;
-    p.PREC_ALPHA_SHIFT   = 24 - p.PRECISIONB;
-    p.PREC_RED_SHIFT     = 16 - p.PRECISIONB;
-    p.NORMAL_MODE_AUTO   = 0;
-    p.NORMAL_MODE_SHAPE  = 1;
-    p.NORMAL_MODE_VERTEX = 2;
-    p.MAX_LIGHTS         = 8;
 
     p.focused            = true;
 
@@ -2179,394 +2586,8 @@
       }
     };
 
-    p.ArrayList = function() {
-      var createArrayList = function(args){
-        var array = [];
-        for (var i = 0; i < args[0]; i++){
-          array[i] = (args.length > 1 ? createArrayList(args.slice(1)) : 0 );
-        }
-
-        array.get = function(i) {
-          return this[i];
-        };
-        array.contains = function(item) {
-          return this.indexOf(item) !== -1;
-        };
-        array.add = function(item) {
-          return this.push(item);
-        };
-        array.size = function() {
-          return this.length;
-        };
-        array.clear = function() {
-          this.length = 0;
-        };
-        array.remove = function(i) {
-          return this.splice(i, 1)[0];
-        };
-        array.isEmpty = function() {
-          return !this.length;
-        };
-        array.clone = function() {
-          return this.slice(0);
-        };
-        array.toArray = function() {
-          return this.slice(0);
-        };
-
-        return array;
-      };
-      return createArrayList(Array.prototype.slice.call(arguments));
-    };
-
     p.reverse = function(array) {
       return array.reverse();
-    };
-
-    ////////////////////////////////////////////////////////////////////////////
-    // HashMap
-    ////////////////////////////////////////////////////////////////////////////
-
-    var virtHashCode = function virtHashCode(obj) {
-      if (obj.constructor === String) {
-        var hash = 0;
-        for (var i = 0; i < obj.length; ++i) {
-          hash = (hash * 31 + obj.charCodeAt(i)) & 0xFFFFFFFF;
-        }
-        return hash;
-      } else if (typeof(obj) !== "object") {
-        return obj & 0xFFFFFFFF;
-      } else if ("hashCode" in obj) {
-        return obj.hashCode.call(obj);
-      } else {
-        if (obj.$id === undefined) {
-          obj.$id = ((Math.floor(Math.random() * 0x10000) - 0x8000) << 16) | Math.floor(Math.random() * 0x10000);
-        }
-        return obj.$id;
-      }
-    };
-
-    var virtEquals = function virtEquals(obj, other) {
-      if (obj === null || other === null) {
-        return (obj === null) && (other === null);
-      } else if (obj.constructor === String) {
-        return obj === other;
-      } else if (typeof(obj) !== "object") {
-        return obj === other;
-      } else if ("equals" in obj) {
-        return obj.equals.call(obj, other);
-      } else {
-        return obj === other;
-      }
-    };
-
-    p.HashMap = function HashMap() {
-      if (arguments.length === 1 && arguments[0].constructor === HashMap) {
-        return arguments[0].clone();
-      }
-
-      var initialCapacity = arguments.length > 0 ? arguments[0] : 16;
-      var loadFactor = arguments.length > 1 ? arguments[1] : 0.75;
-
-      var buckets = new Array(initialCapacity);
-      var count = 0;
-      var hashMap = this;
-
-      function ensureLoad() {
-        if (count <= loadFactor * buckets.length) {
-          return;
-        }
-        var allEntries = [];
-        for (var i = 0; i < buckets.length; ++i) {
-          if (buckets[i] !== undefined) {
-            allEntries = allEntries.concat(buckets[i]);
-          }
-        }
-        buckets = new Array(buckets.length * 2);
-        for (var j = 0; j < allEntries.length; ++j) {
-          var index = virtHashCode(allEntries[j].key) % buckets.length;
-          var bucket = buckets[index];
-          if (bucket === undefined) {
-            buckets[index] = bucket = [];
-          }
-          bucket.push(allEntries[j]);
-        }
-      }
-
-      function Iterator(conversion, removeItem) {
-        var bucketIndex = 0;
-        var itemIndex = -1;
-        var endOfBuckets = false;
-
-        function findNext() {
-          while (!endOfBuckets) {
-            ++itemIndex;
-            if (bucketIndex >= buckets.length) {
-              endOfBuckets = true;
-            } else if (typeof(buckets[bucketIndex]) === 'undefined' || itemIndex >= buckets[bucketIndex].length) {
-              itemIndex = -1;
-              ++bucketIndex;
-            } else {
-              return;
-            }
-          }
-        }
-
-        this.hasNext = function() {
-          return !endOfBuckets;
-        };
-        this.next = function() {
-          var result = conversion(buckets[bucketIndex][itemIndex]);
-          findNext();
-          return result;
-        };
-        this.remove = function() {
-          removeItem(this.next());
-          --itemIndex;
-        };
-
-        findNext();
-      }
-
-      function Set(conversion, isIn, removeItem) {
-        this.clear = function() {
-          hashMap.clear();
-        };
-        this.contains = function(o) {
-          return isIn(o);
-        };
-        this.containsAll = function(o) {
-          var it = o.iterator();
-          while (it.hasNext()) {
-            if (!this.contains(it.next())) {
-              return false;
-            }
-          }
-          return true;
-        };
-        this.isEmpty = function() {
-          return hashMap.isEmpty();
-        };
-        this.iterator = function() {
-          return new Iterator(conversion, removeItem);
-        };
-        this.remove = function(o) {
-          if (this.contains(o)) {
-            removeItem(o);
-            return true;
-          }
-          return false;
-        };
-        this.removeAll = function(c) {
-          var it = c.iterator();
-          var changed = false;
-          while (it.hasNext()) {
-            var item = it.next();
-            if (this.contains(item)) {
-              removeItem(item);
-              changed = true;
-            }
-          }
-          return true;
-        };
-        this.retainAll = function(c) {
-          var it = this.iterator();
-          var toRemove = [];
-          while (it.hasNext()) {
-            var entry = it.next();
-            if (!c.contains(entry)) {
-              toRemove.push(entry);
-            }
-          }
-          for (var i = 0; i < toRemove.length; ++i) {
-            removeItem(toRemove[i]);
-          }
-          return toRemove.length > 0;
-        };
-        this.size = function() {
-          return hashMap.size();
-        };
-        this.toArray = function() {
-          var result = new p.ArrayList(0);
-          var it = this.iterator();
-          while (it.hasNext()) {
-            result.push(it.next());
-          }
-          return result;
-        };
-      }
-
-      function Entry(pair) {
-        this._isIn = function(map) {
-          return map === hashMap && (typeof(pair.removed) === 'undefined');
-        };
-        this.equals = function(o) {
-          return virtEquals(pair.key, o.getKey());
-        };
-        this.getKey = function() {
-          return pair.key;
-        };
-        this.getValue = function() {
-          return pair.value;
-        };
-        this.hashCode = function(o) {
-          return virtHashCode(pair.key);
-        };
-        this.setValue = function(value) {
-          var old = pair.value;
-          pair.value = value;
-          return old;
-        };
-      }
-
-      this.clear = function() {
-        count = 0;
-        buckets = new Array(initialCapacity);
-      };
-      this.clone = function() {
-        var map = new p.HashMap();
-        map.putAll(this);
-        return map;
-      };
-      this.containsKey = function(key) {
-        var index = virtHashCode(key) % buckets.length;
-        var bucket = buckets[index];
-        if (bucket === undefined) {
-          return false;
-        }
-        for (var i = 0; i < bucket.length; ++i) {
-          if (virtEquals(bucket[i].key, key)) {
-            return true;
-          }
-        }
-        return false;
-      };
-      this.containsValue = function(value) {
-        for (var i = 0; i < buckets.length; ++i) {
-          var bucket = buckets[i];
-          if (bucket === undefined) {
-            continue;
-          }
-          for (var j = 0; j < bucket.length; ++j) {
-            if (virtEquals(bucket[j].value, value)) {
-              return true;
-            }
-          }
-        }
-        return false;
-      };
-      this.entrySet = function() {
-        return new Set(
-
-        function(pair) {
-          return new Entry(pair);
-        },
-
-        function(pair) {
-          return pair.constructor === Entry && pair._isIn(hashMap);
-        },
-
-        function(pair) {
-          return hashMap.remove(pair.getKey());
-        });
-      };
-      this.get = function(key) {
-        var index = virtHashCode(key) % buckets.length;
-        var bucket = buckets[index];
-        if (bucket === undefined) {
-          return null;
-        }
-        for (var i = 0; i < bucket.length; ++i) {
-          if (virtEquals(bucket[i].key, key)) {
-            return bucket[i].value;
-          }
-        }
-        return null;
-      };
-      this.isEmpty = function() {
-        return count === 0;
-      };
-      this.keySet = function() {
-        return new Set(
-
-        function(pair) {
-          return pair.key;
-        },
-
-        function(key) {
-          return hashMap.containsKey(key);
-        },
-
-        function(key) {
-          return hashMap.remove(key);
-        });
-      };
-      this.put = function(key, value) {
-        var index = virtHashCode(key) % buckets.length;
-        var bucket = buckets[index];
-        if (bucket === undefined) {
-          ++count;
-          buckets[index] = [{
-            key: key,
-            value: value
-          }];
-          ensureLoad();
-          return null;
-        }
-        for (var i = 0; i < bucket.length; ++i) {
-          if (virtEquals(bucket[i].key, key)) {
-            var previous = bucket[i].value;
-            bucket[i].value = value;
-            return previous;
-          }
-        }++count;
-        bucket.push({
-          key: key,
-          value: value
-        });
-        ensureLoad();
-        return null;
-      };
-      this.putAll = function(m) {
-        var it = m.entrySet().iterator();
-        while (it.hasNext()) {
-          var entry = it.next();
-          this.put(entry.getKey(), entry.getValue());
-        }
-      };
-      this.remove = function(key) {
-        var index = virtHashCode(key) % buckets.length;
-        var bucket = buckets[index];
-        if (bucket === undefined) {
-          return null;
-        }
-        for (var i = 0; i < bucket.length; ++i) {
-          if (virtEquals(bucket[i].key, key)) {
-            --count;
-            var previous = bucket[i].value;
-            bucket[i].removed = true;
-            if (bucket.length > 1) {
-              bucket.splice(i, 1);
-            } else {
-              buckets[index] = undefined;
-            }
-            return previous;
-          }
-        }
-        return null;
-      };
-      this.size = function() {
-        return count;
-      };
-      this.values = function() {
-        var result = new p.ArrayList(0);
-        var it = this.entrySet().iterator();
-        while (it.hasNext()) {
-          var entry = it.next();
-          result.push(entry.getValue());
-        }
-        return result;
-      };
     };
 
     ////////////////////////////////////////////////////////////////////////////
@@ -9225,7 +9246,7 @@
       var executeSketch = function(processing) {
         // Don't start until all specified images in the cache are preloaded
         if (!p.pjs.imageCache.pending) {
-          compiledSketchFunction(processing);
+          compiledSketchFunction(processing, defaultScope, constants);
 
           // Run void setup()
           if (processing.setup) {
@@ -9257,6 +9278,26 @@
 
   // Share lib space
   Processing.lib = {};
+
+  // Hard name substitutions to optimize performance
+  var jsSubstitutions = {
+    abs : "Math.abs",
+    acos : "Math.acos",
+    asin : "Math.asin",
+    atan : "Math.atan",
+    atan2 : "Math.atan2",
+    ceil : "Math.ceil",
+    cos : "Math.cos",
+    exp : "Math.exp",
+    floor : "Math.floor",
+    log : "Math.log",
+    PI : "Math.PI",
+    pow : "Math.pow",
+    round : "Math.round",
+    sin : "Math.sin",
+    sqrt : "Math.sqrt",
+    tan : "Math.tan"
+  };
 
   // Processing global methods and constants for the parser
   function getGlobalMembers() {
@@ -10315,13 +10356,25 @@
     AstRoot.prototype.toString = function() {
       var localNames = getLocalNames(this.statements);
       replaceContext = function(name) {
-        if(name in globalMembers && !(name in localNames)) {
-          return "processing." + name;
+        if(!(name in localNames)) {
+          if(name in jsSubstitutions) {
+            return jsSubstitutions[name];
+          } else if(name in constants) {
+            if(typeof constants[name] === 'number') {
+              return constants[name].toString();
+            } else {
+              return "constants." + name;
+            }
+          } else if(name in defaultScope) {
+            return "defaultScope." + name;
+          } else if(name in globalMembers) {
+            return "processing." + name;
+          }
         }
         return name;
       };
       var result = "// this code was autogenerated from PJS\n" +
-        "(function(processing) {\n" +
+        "(function(processing,defaultScope,constants) {\n" +
         this.statements.join('') + "\n})";
       replaceContext = null;
       return result;
@@ -10447,13 +10500,15 @@
     aCode = parseProcessing(aCode);
     
     // Check if 3D context is invoked -- this is not the best way to do this.
-    if (aCode.match(/\bsize\((?:.+),(?:.+),\s*processing.(OPENGL|P3D)\s*\);/)) {
+    if (aCode.match(/\bsize\((?:.+),(?:.+),\s*2\s*\);/)) {
       p.use3DContext = true;
     }
     return aCode;
   };
 
   Processing.version = "@VERSION@";
+
+  Processing.constants = constants;
 
   // Share lib space
   Processing.lib = {};
