@@ -1,0 +1,25 @@
+//@F1LT3R
+
+(function(Processing){
+
+  function Gradient() {
+    this.p = Processing.currentInstance;
+
+    this.ctx = this.p.canvas.getContext('2d');
+    this.gradient = this.ctx.createLinearGradient(arguments[0],arguments[1],arguments[2],arguments[3]);
+    for(var i=0,l=arguments.length-4;i< l;i++){
+      this.gradient.addColorStop(parseFloat(2/l*i),arguments[i+4]);
+    }
+    return this;
+  }
+
+  Gradient.prototype.fill = function Gradient_fill() {
+    this.p.fill(this.gradient);
+  }        
+
+  Gradient.prototype.background = function Gradient_fill() {
+    this.p.background(this.gradient);
+  }        
+
+  Processing.defaultScope.Gradient = Gradient;
+})(Processing);

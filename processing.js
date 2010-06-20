@@ -681,10 +681,12 @@
         doFill = true,
         fillStyle = [1.0, 1.0, 1.0, 1.0],
         currentFillColor = 0xFFFFFFFF,
+        customFill = null,
         isFillDirty = true,
         doStroke = true,
         strokeStyle = [0.8, 0.8, 0.8, 1.0],
         currentStrokeColor = 0xFFFDFDFD,
+        customStroke = null,
         isStrokeDirty = true,
         lineWidth = 1,
         loopStarted = false,
@@ -3302,6 +3304,8 @@
       }
 
       looping = window.setInterval(function() {
+        Processing.currentInstance = p;
+
         try {
           try {
             p.focused = document.hasFocus();
@@ -3311,6 +3315,8 @@
           window.clearInterval(looping);
           throw e_loop;
         }
+
+        Processing.currentInstance = null;
       }, curMsPerFrame);
 
       doLoop = true;
@@ -5449,12 +5455,19 @@
     ////////////////////////////////////////////////////////////////////////////
 
     p.fill = function fill() {
+      if(typeof arguments[0] !== "number") {
+        customFill = arguments[0];
+        doFill = true;
+        return;
+      }
+
       var color = p.color(arguments[0], arguments[1], arguments[2], arguments[3]);
       if(color === currentFillColor && doFill) {
         return;
       }
       doFill = true;
       currentFillColor = color;
+      customFill = null;
 
       if (p.use3DContext) {
         fillStyle = p.color.toGLArray(color);
@@ -5466,7 +5479,7 @@
     function executeContextFill() {
       if(doFill) {
         if(isFillDirty) {
-          curContext.fillStyle = p.color.toString(currentFillColor);
+          curContext.fillStyle = customFill || p.color.toString(currentFillColor);
           isFillDirty = false;
         }
         curContext.fill();
@@ -5478,12 +5491,19 @@
     };
 
     p.stroke = function stroke() {
+      if(typeof arguments[0] !== "number") {
+        customStroke = arguments[0];
+        doStroke = true;
+        return;
+      }
+
       var color = p.color(arguments[0], arguments[1], arguments[2], arguments[3]);
       if(color === currentStrokeColor && doStroke) {
         return;
       }
       doStroke = true;
       currentStrokeColor = color;
+      customStroke = null;
 
       if (p.use3DContext) {
         strokeStyle = p.color.toGLArray(color);
@@ -5495,7 +5515,7 @@
     function executeContextStroke() {
       if(doStroke) {
         if(isStrokeDirty) {
-          curContext.strokeStyle = p.color.toString(currentStrokeColor);
+          curContext.strokeStyle = customStroke || p.color.toString(currentStrokeColor);
           isStrokeDirty = false;
         }
         curContext.stroke();
@@ -5586,7 +5606,7 @@
             var c = p.get(x, y);
             p.set(x, y, colorBlendWithAlpha(c, currentStrokeColor, alphaOfPointWeight));
           } else {
-            curContext.fillStyle = p.color.toString(currentStrokeColor);
+            curContext.fillStyle = customFill || p.color.toString(currentStrokeColor);
             curContext.fillRect(Math.round(x), Math.round(y), 1, 1);
             isFillDirty = true;
           }
@@ -7445,18 +7465,22 @@
 
     // Draw an image or a color to the background
     p.background = function background() {
-      var color, a, img;
+      var color, a, img, custom;
 
       // background params are either a color or a PImage
       if (typeof arguments[0] === 'number') {
         color = p.color.apply(this, arguments);
         // override alpha value, processing ignores the alpha for background color
         color = color | p.ALPHA_MASK;
-      } else if (arguments.length === 1 && arguments[0] instanceof PImage) {
-        img = arguments[0];
+      } else if (arguments.length === 1) {
+        if(arguments[0] instanceof PImage) {
+          img = arguments[0];
 
-        if (!img.pixels || img.width !== p.width || img.height !== p.height) {
-          throw "Background image must be the same dimensions as the canvas.";
+          if (!img.pixels || img.width !== p.width || img.height !== p.height) {
+            throw "Background image must be the same dimensions as the canvas.";
+          }
+        } else {
+          custom = arguments[0];
         }
       } else {
         throw "Incorrect background parameters.";
@@ -7480,9 +7504,15 @@
             curContext.fillRect(0, 0, p.width, p.height);
             isFillDirty = true;
           };
-        } else {
+        } else if(typeof img !== 'undefined') {
           refreshBackground = function() {
             p.image(img, 0, 0);
+          };
+        } else {
+          refreshBackground = function() {
+            curContext.fillStyle = custom;
+            curContext.fillRect(0, 0, p.width, p.height);
+            isFillDirty = true;
           };
         }
       }
@@ -8541,7 +8571,7 @@
           curContext.font = curContext.mozTextStyle = curTextSize + "px " + curTextFont.name;
 
           if (isFillDirty) {
-            curContext.fillStyle = p.color.toString(currentFillColor);
+            curContext.fillStyle = customFill || p.color.toString(currentFillColor);
             isFillDirty = false;
           }
           
@@ -9235,17 +9265,11 @@
         p.disableContextMenu();
       }
 
-      // Step through the libraries that were attached at doc load...
-      for (var i in Processing.lib) {
-        if (Processing.lib) {
-          // Init the libraries in the context of this p_instance
-          Processing.lib[i].call(this);
-        }
-      }
-
       var executeSketch = function(processing) {
         // Don't start until all specified images in the cache are preloaded
         if (!p.pjs.imageCache.pending) {
+          Processing.currentInstance = p;
+
           compiledSketchFunction(processing, defaultScope, constants);
 
           // Run void setup()
@@ -9263,6 +9287,8 @@
               processing.loop();
             }
           }
+
+          Processing.currentInstance = null;
         } else {
           window.setTimeout(executeSketch, 10, processing);
         }
@@ -9343,14 +9369,7 @@
     for(i=0,l=names.length;i<l;++i) {
       members[names[i]] = null;
     }
-    for(var lib in Processing.lib) {
-      if(Processing.lib[lib] && Processing.lib[lib].exports) {
-       var exportedNames = Processing.lib[lib].exports;
-       for(i=0,l=exportedNames.length;i<l;++i) {
-         members[exportedNames[i]] = null;
-       }
-      }
-    }
+
     return members;
   }
 
@@ -10509,9 +10528,10 @@
   Processing.version = "@VERSION@";
 
   Processing.constants = constants;
+  Processing.defaultScope = defaultScope;
 
-  // Share lib space
-  Processing.lib = {};
+  // Stores current executing instance
+  Processing.currentInstance = null;
 
   // Store Processing instances 
   Processing.instances = [];
