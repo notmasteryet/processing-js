@@ -10665,6 +10665,19 @@
       return p.glyphTable[url];
     };
 
+    p.param = function(name) {
+      // trying attribute that was specified in CANVAS
+      var attributeName = "data-processing-" + name;
+      if(curElement.hasAttribute(attributeName)) {
+        return curElement.getAttribute(attributeName);
+      }
+      // fallback to default params
+      if(curSketch.params.hasOwnProperty(name)) {
+        return curSketch.params[name];
+      }
+      return null;
+    };
+
     ////////////////////////////////////////////////////////////////////////////
     // Class methods
     ////////////////////////////////////////////////////////////////////////////
@@ -11079,7 +11092,7 @@
   "mouseDragged","mouseMoved","mousePressed","mouseReleased","mouseScroll","mouseScrolled","mouseX",
   "mouseY","MOVE","MULTIPLY","nf","nfc","nfp","nfs","noCursor","NOCURSOR","noFill","noise","noiseDetail","noiseSeed",
   "noLights","noLoop","norm","normal","NORMAL_MODE_AUTO","NORMALIZED","NORMAL_MODE_SHAPE","NORMAL_MODE_VERTEX",
-  "noSmooth","noStroke","noTint","OPAQUE","OPENGL","ortho","OVERLAY","P3D","peg","perspective","PI","PImage","pixels",
+  "noSmooth","noStroke","noTint","OPAQUE","OPENGL","ortho","OVERLAY","P3D","param","peg","perspective","PI","PImage","pixels",
   "PMatrix2D", "PMatrix3D", "PMatrixStack",
   "pmouseX","pmouseY","point","Point","pointLight","POINTS","POLYGON","popMatrix","popStyle","POSTERIZE",
   "pow","PREC_ALPHA_SHIFT","PRECISIONB","PRECISIONF","PREC_MAXVAL","PREC_RED_SHIFT","print",
@@ -12223,6 +12236,8 @@
             sketch.options.crispLines = value === "true";
           } else if (key === "pauseOnBlur") {
             sketch.options.pauseOnBlur = value === "true";
+          } else if (key.substring(0, 6) === "param-") {
+            sketch.params[key.substring(6)] = value;
           } else {
             sketch.options[key] = value;
           }
@@ -12285,6 +12300,7 @@
       crispLines: false,
       pauseOnBlur: false
     };
+    this.params = {};
     this.imageCache = {
       pending: 0,
       images: {},

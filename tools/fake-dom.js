@@ -7,7 +7,6 @@ var __elem_func__ = function() { return elem };
 var navigator = { useragent: true };
 
 var canvas = {
-  setAttribute: __empty_func__,
   attachEvent: __empty_func__,
   addEventListener: __empty_func__,
   appendChild: __elem_func__,
@@ -72,7 +71,11 @@ var canvas = {
   },
   style: {
     setProperty: __empty_func__
-  }
+  },
+  __attributes : { "data-processing-sources" : "test.pjs" },
+  hasAttribute : function(name) { return this.__attributes.hasOwnProperty(name.toLowerCase()); },
+  getAttribute : function(name) { return this.__attributes[name.toLowerCase()]; },
+  setAttribute : function(name, value) { this.__attributes[name.toLowerCase()] = value; }
 };
  
 var WebGLFloatArray = __empty_func__;
