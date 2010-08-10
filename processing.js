@@ -8719,9 +8719,33 @@
         this.sourceImg = htmlImg;
       };
 
+      this.fromHTMLVideoData = function(htmlVideo) {
+        // convert an <video> to a PImage
+        var width = htmlVideo.videoWidth;
+        var height = htmlVideo.videoHeight;
+        if(!width || !height) return;
+
+        var canvasData = getCanvasData(htmlVideo, width, height);
+        try {
+          var imageData = canvasData.context.getImageData(0, 0, width, height);
+          this.fromImageData(imageData);
+        } catch(e) {
+          if (width && height) {
+            this.isRemote = true;
+            this.width = width;
+            this.height = height;
+          }
+        }
+        this.sourceImg = htmlVideo;
+      };
+
       if (arguments.length === 1) {
         // convert an <img> to a PImage
-        this.fromHTMLImageData(arguments[0]);
+        if(arguments[0] instanceof HTMLVideoElement) {
+          this.fromHTMLVideoData(arguments[0]);
+        } else {
+          this.fromHTMLImageData(arguments[0]);
+        }
       } else if (arguments.length === 2 || arguments.length === 3) {
         this.width = aWidth || 1;
         this.height = aHeight || 1;
@@ -11071,7 +11095,7 @@
   "exit","exp","expand","fill","filter","filter_bilinear","filter_new_scanline","float","floor","focused",
   "frameCount","frameRate","frustum","get","glyphLook","glyphTable","GRAY","green","GREEN_MASK",
   "HALF_PI","HAND","HARD_LIGHT","HashMap","height","hex","hint","hour","HSB","hue","image","IMAGE","imageMode",
-  "Import","int","intersect","INVERT","JAVA2D","join","key","keyPressed","keyReleased","LEFT","lerp",
+  "Import","int","intersect","INVERT","JAVA2D","join","key","keyCode","keyPressed","keyReleased","LEFT","lerp",
   "lerpColor","LIGHTEST","lightFalloff","lights","lightSpecular","line","LINES","link","loadBytes",
   "loadFont","loadGlyphs","loadImage","loadPixels","loadShape","loadStrings","log","loop","mag","map","match",
   "matchAll","max","MAX_FLOAT","MAX_INT","MAX_LIGHTS","millis","min","MIN_FLOAT","MIN_INT","minute",

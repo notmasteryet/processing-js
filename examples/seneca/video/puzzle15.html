@@ -1,0 +1,204 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
+<html xmlns="http://www.w3.org/1999/xhtml"> 
+<head runat="server"> 
+	<title>Processing.js video 15 puzzle</title> 
+	<script type="text/javascript" src="../../../processing.js"></script> 
+	<script type="text/javascript" src="../../init.js"></script> 
+	<style type="text/css"> 
+	html, body
+	{
+		background: #EEE;
+		font-family: Arial;
+		font-size: 13px;
+		margin: 0;
+		padding: 0;
+	}
+	h1
+	{
+		background: #385C85;
+		color: #FFF;
+		padding: 10px;
+		padding-left: 20px;
+		margin-top: 0px;
+	}
+	h1 a
+	{
+		color: #FFF;
+	}
+	h2
+	{
+		padding-left: 20px;
+	}
+	p
+	{
+		padding-left: 20px;
+		line-height: 1.3em;
+	}
+	p a
+	{
+		color: #385C85;
+	}
+	canvas
+	{
+		margin: 10px 0;
+	}
+	pre
+	{
+		margin-left: 20px;
+		margin-right: 20px;
+		padding: 5px;
+		background: #FFF;
+		border-top: 1px solid #333;
+		border-bottom: 1px solid #333;
+	}
+	div.ref-col
+	{
+		float: left;
+		width: 32%;
+	}
+	</style> 
+</head> 
+<body> 
+	<h1>Video 15 puzzle</h1> 
+
+  <p>Original video can be found at <a href="http://commons.wikimedia.org/wiki/File:Maldives_beach.ogv" target="_blank">http://commons.wikimedia.org/wiki/File:Maldives_beach.ogv</a> </p>
+
+	<!-- copy paste your processing code below this script tag --> 
+	<script id="script" type="application/processing"> 
+ 
+var videoElement = null;
+int videoWidth = 640, videoHeight = 360;
+int fieldSize = 360, tileSize = fieldSize / 4;
+int videoXOffset = (videoWidth - fieldSize) / 2, videoYOffset = (videoHeight - fieldSize) / 2;
+
+int[][] field;
+
+void setup() {
+  size(fieldSize, fieldSize);
+  videoElement = document.getElementById("video1");
+
+  shuffle();
+
+  frameRate(25);
+}
+
+void shuffle() {
+  field = new int[4][4];
+  for(int i=0;i<4;++i) {
+    for(int j=0;j<4;++j) field[i][j] = j + i * 4;
+  }
+  int count = 100, row = 3, col = 3;
+  while(count-- > 0) {
+    boolean horizontal = random() < 0.5;
+    if(horizontal) {
+      boolean left = random() < 0.5;
+      if(left) {
+        if(col < 3) { field[row][col] = field[row][col+1]; col++; }
+      } else {
+        if(col > 0) { field[row][col] = field[row][col-1]; col--; }
+      }
+    } else {
+      boolean top = random() < 0.5;
+      if(top) {
+        if(row < 3) { field[row][col] = field[row+1][col]; row++; }
+      } else {
+        if(row > 0) { field[row][col] = field[row-1][col]; row--; }
+      }
+    }
+  }
+  field[row][col] = -1;
+}
+
+void drawTile(img, int col, int row, int x, int y) {
+  PImage tile = img.get(videoXOffset + col * tileSize, videoYOffset + row * tileSize, tileSize, tileSize);
+  PGraphics g = createGraphics(tileSize, tileSize, JAVA2D);
+  g.image(tile, 0, 0);
+  int roundBorder = 15;
+
+  g.stroke(255, 100); // burn
+  g.line(0,0,tileSize-1, 0);
+  g.line(0,0,0,tileSize-1);
+  g.stroke(0,100); // darken
+  g.line(tileSize-1,tileSize-1,tileSize-1, 1);
+  g.line(tileSize-1,tileSize-1,0,tileSize-1);
+
+  image(g, x, y);
+}
+
+void draw() {
+  background(100);
+
+  PImage frame = new PImage(videoElement);
+
+  for(int i=0;i<4;++i) {
+    for(int j=0;j<4;++j) {
+      int tileIndex = field[i][j];
+      if(tileIndex < 0) continue;
+
+      int col = tileIndex % 4, row = tileIndex >> 2;
+
+      drawTile(frame, col, row, j * tileSize, i * tileSize);
+    }
+  }  
+}
+
+void moveTile(int colMove, int rowMove) {
+  for(int i=0;i<4;++i) {
+    for(int j=0;j<4;++j) {
+      if(field[i][j] < 0) {
+        if(i - rowMove >= 0 && i - rowMove < 4 &&
+           j - colMove >= 0 && j - colMove < 4) {
+           field[i][j] = field[i - rowMove][j - colMove];
+           field[i - rowMove][j - colMove] = -1;
+        }
+      }
+    }
+  }  
+}
+
+void keyPressed() {
+  if(keyCode == UP) {
+    moveTile(0, -1);
+  } else if(keyCode == DOWN) {
+    moveTile(0, 1);
+  } else if(keyCode == LEFT) {
+    moveTile(-1, 0);
+  } else if(keyCode == RIGHT) {
+    moveTile(1, 0);
+  }
+}
+
+void pushTile(int col, int row) {
+  if(field[row][col] < 0) return; // no tile
+  if(col > 0 && field[row][col - 1] < 0) {
+    field[row][col - 1] = field[row][col]; field[row][col] = -1;
+  } else if(col < 3 && field[row][col + 1] < 0) {
+    field[row][col + 1] = field[row][col]; field[row][col] = -1;
+  } else if(row > 0 && field[row - 1][col] < 0) {
+    field[row - 1][col] = field[row][col]; field[row][col] = -1;
+  } else if(row < 3 && field[row + 1][col] < 0) {
+    field[row + 1][col] = field[row][col]; field[row][col] = -1;
+  }
+}
+
+void mousePressed() {
+  var col = (int)(mouseX / tileSize);
+  var row = (int)(mouseY / tileSize);
+  pushTile(col, row);
+}
+
+	</script> 
+	<canvas id="display"></canvas> 
+  <br/>
+<a href="#" onclick='document.getElementById("videoDiv").setAttribute("style", ""); event.target.setAttribute("style", "display:none"); return false;'>Show video</a>
+<div id="videoDiv" style="display:none">
+  <!-- Original video location: http://commons.wikimedia.org/wiki/File:Maldives_beach.ogv -->
+  <video id="video1" src="Maldives_beach.ogv" width="640" height="360" autoplay loop></video>
+</div>
+	<br /> 
+	<pre style="border-style: dotted; border-width: 1px; background-color: #FFFFFF; padding: 2px; margin: 5px" id="scriptDisplay">
+	</pre> 
+  <script>
+    document.getElementById("scriptDisplay").innerHTML = document.getElementById("script").text;
+  </script>
+	<br /> 
