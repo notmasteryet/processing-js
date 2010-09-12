@@ -1129,7 +1129,7 @@
 
                     callback(img);
                 };
-                img.src = expandUrl;
+                img.src = expandUrl(file);
             };
 
             return $async;
