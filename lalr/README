@@ -1,0 +1,9 @@
+To build the processing.lalr.js file, run "make" command.
+
+To override default parser:
+  <script src="processing.js"></script>
+  <script src="processing.lalr.js"></script>
+  <script src="asyncfx.js"></script>
+
+TODO remove asyncfx.js dependency
+
