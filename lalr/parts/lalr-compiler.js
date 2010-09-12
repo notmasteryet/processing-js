@@ -12,7 +12,7 @@ function compileProcessing(ast) {
     
     var context = {};
     var s = ""; // "/*\n" + out(ast, "") + " */\n";
-    s += "(function($p,$constants) { with($p) with($constants) {\n";
+    s += "(function($p) { with($p) {\n";
     if (ast.n == "CompilationUnit") {
         s += outGlobalDeclarations(ast.first().children, context);
     }
