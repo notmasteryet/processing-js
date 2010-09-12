@@ -8,12 +8,11 @@
 function compileProcessing(ast) {
     preprocessProcessing(ast);
     collectGlobalStatements(ast);
-    splitExpressions(ast);
     defineContextSymbols(ast, null);
     
-    var context = new Object();        
+    var context = {};
     var s = ""; // "/*\n" + out(ast, "") + " */\n";
-    s += "(function(p,$constants) { with(p) with($constants) {\n";
+    s += "(function($p,$constants) { with($p) with($constants) {\n";
     if (ast.n == "CompilationUnit") {
         s += outGlobalDeclarations(ast.first().children, context);
     }
@@ -126,7 +125,7 @@ function outGlobalMethod(method, context) {
   for (var i = 0; i < methodParameters.length; ++i) {
       parameters.push(getVariableDeclaratorName(methodParameters[i].children[1]));
   }
-  var s = "p." + methodName + " = function " + methodName + "(" +
+  var s = "$p." + methodName + " = function " + methodName + "(" +
     parameters.join(", ") + ") {"
   s += outMethodBody(method.children[1], context);
   s += "};\n";
@@ -192,44 +191,11 @@ function outClassMethod(method, context) {
 }
 
 function outMethodBody(methodBody, context) {
-    var savedStatesOperation = context.statesOperation;
-    delete context.statesOperation;
-
     var body = "var $this=this;\n" +
         outBlockContent(methodBody.first(), context);
-
-    var states = findStates(methodBody.first());
-    for (var i = 0; i < states.length; ++i) {
-        body += outMethodBodyInState(methodBody, states[i], context);
-    }
-    if (savedStatesOperation != undefined)
-        context.statesOperation = savedStatesOperation;
     return body;
 }
 
-function outMethodBodyInState(methodBody, stateName, context) {
-    var s = "function " + stateName + "State(context) { with(context) {";
-    context.statesOperation = { operation: "find", name: stateName };
-    s += outBlockContent(methodBody.first(), context);
-    return s + "}}\n";
-}
-
-function findStates(ast) {
-    var queue = [ast];
-    var names = [];
-    while (queue.length > 0) {
-        var current = queue.shift();
-        if (current.match("BlockStatement") && current.generated != undefined) {
-            names.push(current.generated.name);
-        }
-        if (current.constructor == AstNode &&
-            current.n != "Expression" && current.n != "MethodBody" && current.n != "ConstuctorBody") {
-            for (var i = 0; i < current.children.length; ++i)
-                queue.push(current.children[i]);            
-        }
-    }
-    return names;
-}
 
 function outBlockContent(block, context) {
     var content = new Array();
@@ -249,24 +215,8 @@ function outBlockStatement(statement, context) {
     if (statement.first().n == "Statement") {
         return outStatement(statement.first(), context);
     } else {
-        if (context.statesOperation != undefined) {
-            if (context.statesOperation.operation == "find") {
-                if (statement.generated != undefined) {
-                    var name = statement.generated.name;
-                    if (name == context.statesOperation.name) {
-                        context.statesOperation.operation = "found";
-                    }
-                }
-                return undefined;
-            }
-        }         
         var localVariableDeclaration = statement.first().first();
         var s = outLocalVariableDeclaration(localVariableDeclaration, context) + ";";
-        if (statement.generated != undefined) {
-            var name = statement.generated.name;
-            s += " if(" + name + " == $async) return $async.push(" + name + "State, $this, {" + 
-                outContextVariables(statement.generated.context) + "}, \"" + name + "\");";
-        }
         return s;
     }
 }
@@ -319,18 +269,6 @@ function outVariableInitializer(initializer, context) {
 
 function outStatement(statement, context) {
     if (statement.first().n == "StatementWithoutTrailingSubstatement") {
-        if (context.statesOperation != undefined &&
-            context.statesOperation.operation == "find") {
-            switch(statement.first().first().n)
-            {
-                case "EmptyStatement":
-                case "ExpressionStatement":
-                case "BreakStatement":
-                case "ContinueStatement":
-                case "ReturnStatement":
-                    return undefined;
-            }
-        }
         return outStatementWithoutTrailingSubstatement(statement.first(), context);
     } else {
         switch (statement.first().n) {
@@ -349,18 +287,6 @@ function outStatement(statement, context) {
 }
 
 function outIfStatement(statement, context) {
-    if (context.statesOperation != undefined &&
-            context.statesOperation.operation == "find") {
-        var s0 = outStatement(statement.children[4], context);
-        if (context.statesOperation.operation == "find" &&
-            statement.children.length > 5) {
-            s0 = outStatement(statement.children[6], context);
-        }
-        if (context.statesOperation.operation == "found")
-            return s0;
-        return undefined;
-    }
-
     var s = "if (" + outAnyExpression(statement.children[2], context) + ") ";
     s += outStatement(statement.children[4], context);
     if (statement.children.length > 5) {
@@ -372,18 +298,6 @@ function outIfStatement(statement, context) {
 var autoWhileId = 0;
 
 function outWhileStatement(statement, context) {
-    if (context.statesOperation != undefined &&
-            context.statesOperation.operation == "find") {
-        var s0 = outStatement(statement.children[4], context);
-        if (context.statesOperation.operation == "find") return undefined;
-        var whileFlag = "$autoWhile" + (autoWhileId++);
-        var s = "var " + whileFlag + " = false;\ndo {\n" + s0 + "} while((" + whileFlag + "=true),false);\n";
-        return s + "if(" + whileFlag + ") {\n" +
-            "while (" + outAnyExpression(statement.children[2], context) + ") " +
-                outStatement(statement.children[4], context) +
-            "}\n";
-    }
-    
     return "while (" + outAnyExpression(statement.children[2], context) + ") " +
         outStatement(statement.children[4], context);
 }
@@ -411,19 +325,6 @@ function outForStatement(statement, context) {
         }
     }
 
-    if (context.statesOperation != undefined &&
-            context.statesOperation.operation == "find") {
-        var s0 = outStatement(statement.children[statement.children.length - 1], context);
-        if (context.statesOperation.operation == "find") return undefined;
-        var whileFlag = "$autoWhile" + (autoWhileId++);
-        var s = "var " + whileFlag + " = false;\ndo {\n" + s0 + "} while((" + whileFlag + "=true),false);\n";
-        forArguments[0] = forArguments[2];
-        return s + "if(" + whileFlag + ") {\n" +
-            "for (" + forArguments.join("; ") + ") " +
-            outStatement(statement.children[statement.children.length - 1], context) +
-            "}\n";
-    }
-
     var s = "for (" + forArguments.join("; ") + ") ";
     s += outStatement(statement.children[statement.children.length - 1], context);
     return s;
@@ -445,41 +346,11 @@ function outStatementWithoutTrailingSubstatement(statement, context) {
 }
 
 function outDoStatement(statement, context) {
-    if (context.statesOperation != undefined &&
-            context.statesOperation.operation == "find") {
-        var s0 = outStatement(statement.children[1], context);
-        if (context.statesOperation.operation == "find") return undefined;
-        var whileFlag = "$autoWhile" + (autoWhileId++);
-        var s = "var " + whileFlag + " = false;\ndo {\n" + s0 + "} while((" + whileFlag + "=true),false);\n";
-        return s + "if(" + whileFlag + ") {\n" +
-            "while (" + outAnyExpression(statement.children[4], context) + ") " +
-                outStatement(statement.children[1], context) +
-            "}\n";
-    }
-
     return "do " + outStatement(statement.children[1], context) + " while (" + outAnyExpression(statement.children[4], context) + ");";
 }
 
 function outSwitchStatement(statement, context) {
     var block = statement.children[4];
-
-    if (context.statesOperation != undefined &&
-            context.statesOperation.operation == "find") {
-
-        if (block.children[1].n == "SwitchBlockStatementGroups") {
-            var s1 = "";
-            for (var i = 0; i < block.children[1].children.length; ++i) {
-                var group = block.children[1].children[i];
-                for (var j = 0; j < group.children[1].children.length; ++j) {
-                    s1 += outBlockStatement(group.children[1].children[j], context) + "\n";
-                }
-                if (context.statesOperation.operation != "find") {
-                    return "do { " + s1 + " } while(false);";
-                }
-            }
-        }
-        return undefined;
-    }
     
     var s = "switch (" + outAnyExpression(statement.children[2], context) + ") {\n";
     if (block.children[1].n == "SwitchBlockStatementGroups") {
@@ -510,17 +381,7 @@ function outSwitchLabel(label, context) {
         return "default:";
 }
 
-function outTryStatement(tryStatement, context) {
-    
-    if (context.statesOperation != undefined &&
-            context.statesOperation.operation == "find") {
-        var s0 = outBlockContent(tryStatement.children[1], context);
-        if (context.statesOperation.operation == "find") return undefined;
-
-        return "try {" + s0 + "} " +
-            outCatchStatements(tryStatement, context);
-    }
-
+function outTryStatement(tryStatement, context) {    
     return "try {" + outBlockContent(tryStatement.children[1], context) + "} " +
         outCatchStatements(tryStatement, context);
 }
@@ -657,13 +518,13 @@ function outArrayCreationExpression(expression, context) {
 function getLiteral(literal) {
     var value = literal.toString();
     if (literal.first().n == "ColorLiteral") {
-        return "DefaultColor(0x" + value.substr(1, 2) + ", 0x" + value.substr(3, 2) + ", 0x" + value.substr(5, 2) + ")";
+        return "0xFF" + value.substr(1, 6);
     } else if (literal.first().n == "FloatPointLiteral") {
         return value.replace(/[fFdD]$/, "");
     } else if (literal.first().n == "IntegerLiteral") {
         return value.replace(/[lL]$/, "");
     } else if (literal.first().n == "CharLiteral") {
-        return eval(value).charCodeAt(0) + " /* " + value + " */ ";
+        return "$p.Character(" + value +")";
     }
     return value;    
 }
@@ -973,109 +834,6 @@ function removeAt(array, index) {
 
 var autoId = 0;
 
-function splitExpressions(ast, parent) {
-    var inserts = undefined;
-    switch (ast.n)
-    {
-    case "Expression":
-        switch(parent.n) { // TODO while, do, for expressions
-        case "WhileStatement":
-        case "WhileStatementNoShortIf":
-        case "DoStatement":
-        case "ForStatement":
-        case "ForStatementNoShortIf":        
-            return undefined;
-        }
-        break;
-    case "BlockStatements":
-        for (var i = 0; i < ast.children.length; ++i) {
-            if (ast.children[i].match(["BlockStatement", "Statement",
-                "StatementWithoutTrailingSubstatement",
-                "ExpressionStatement", "StatementExpression", "MethodInvocation"])) {
-                
-                var mi = ast.children[i].first().first().first().first().first();
-                inserts = splitExpressions(mi);
-                
-                var newId = "$auto" + (autoId++);
-                ast.children[i] = createTempResultVariable(newId, mi);
-            }
-            else {
-                inserts = splitExpressions(ast.children[i], ast);
-            }
-            if (inserts != undefined) {
-                var inserted = inserts.length;
-                ast.children = insertInArray(ast.children, i, inserts);
-                i += inserted;
-            }
-        }
-        return undefined;
-    case "FieldDeclaration": // TODO in class field
-    case "Catches": // TODO in catches
-        return undefined; 
-}
-    
-    if (ast.constructor == AstNode) {
-        scan1:
-        for (var i = 0; i < ast.children.length; ++i) {
-            var inserts0 = splitExpressions(ast.children[i], ast);
-            if (inserts0 != undefined) {
-                if (inserts == undefined)
-                    inserts = inserts0;
-                else
-                    inserts = concatArrays(inserts, inserts0);
-            }
-
-            switch (ast.n) { // TODO other parts of logic expression
-            case "ConditionalExpression":
-            case "ConditionalOrExpression":
-            case "ConditionalAndExpression":
-                break scan1;    
-            }
-        }
-
-        for (var i = 0; i < ast.children.length; ++i) {
-            if (ast.match(["PostfixExpression", "Primary", "PrimaryNoNewArray", "MethodInvocation"])) {
-                var mi = ast.first().first().first();
-                
-                if (mi.first().n == "ConversionName") continue; // conversions always return sych value
-                
-                var newId = "$auto" + (autoId++);
-
-                ast.children[0] = createAst(["Name", "SimpleName"],
-                    [createToken("Identifier", newId)]);
-
-                var newStatement = createTempResultVariable(newId, mi);
-
-                if (inserts == undefined) inserts = [];
-                inserts.push(newStatement);
-            }
-        }
-        return inserts;
-    }
-
-    function createTempResultVariable(newId, mi, isNew) {
-        var rightSide = createAst(["Expression", "AssignmentExpression", "ConditionalExpression",
-                    "ConditionalOrExpression", "ConditionalAndExpression",
-                    "InclusiveOrExpression", "ExclusiveOrExpression",
-                    "AndExpression", "EqualityExpression", "RelationalExpression",
-                    "ShiftExpression", "AdditiveExpression", "MultiplicativeExpression",
-                    "UnaryExpression", "PostfixExpression", "Primary", "PrimaryNoNewArray"], [mi]);
-        var declarator = createAst("VariableDeclarator", [
-                    createAst("VariableDeclaratorId", [createToken("Identifier", newId)]),
-                    createToken("="),
-                    createAst("VariableInitializer", [rightSide])
-                ]);
-        var declarators = createAst("VariableDeclarators", [declarator]);
-        declarators.delimiter = ", ";
-        var type = createAst(["Type", "ReferenceType", "ClassOrInterfaceType",
-                "Name", "SimpleName"], [createToken("Identifier", "Object")]);
-        var newStatement = createAst(["BlockStatement", "LocalVariableDeclarationStatement"],
-                [createAst("LocalVariableDeclaration", [type, declarators]), createToken(';')]);
-        newStatement.generated = { type: "var", name: newId, isNew: (isNew == true) };
-        return newStatement;
-    }
-}
-
 function defineContextSymbols(ast, last) {
     var current = last;
     switch (ast.n) {
@@ -1086,9 +844,6 @@ function defineContextSymbols(ast, last) {
             current = null;
             break;
         case "BlockStatement":
-            if (ast.generated != undefined) {
-                ast.generated.context = last;
-            }
             break;
         case "VariableDeclarator":
             var name = getVariableDeclaratorName(ast);
