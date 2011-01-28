@@ -7286,14 +7286,14 @@
         return;
       }
 
-      looping = window.setInterval(function() {
+      looping = setInterval(function() {
         try {
           if (document.hasFocus instanceof Function) {
             p.focused = document.hasFocus();
           }
           p.redraw();
         } catch(e_loop) {
-          window.clearInterval(looping);
+          clearInterval(looping);
           throw e_loop;
         }
       }, curMsPerFrame);
@@ -16228,7 +16228,7 @@
             }
           }
         } else {
-          window.setTimeout(function() { executeSketch(processing); }, 10);
+          setTimeout(function() { executeSketch(processing); }, 10);
         }
       };
 
