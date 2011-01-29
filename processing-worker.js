@@ -1,18 +1,20 @@
-var __messageQueue = []
-function __flushMessages() {
-  if (__messageQueue.length === 0) {
-    return;
+var __postMessage = ((function() {
+  var queue = []
+  function flushMessages() {
+    if (queue.length === 0) {
+      return;
+    }
+    postMessage(queue);
+    queue = [];
   }
-  postMessage(__messageQueue);
-  __messageQueue = [];
-}
-function __postMessage(message) {
-  __messageQueue.push(message);
-  if (__messageQueue.length > 200) {
-    __flushMessages();
-  }
-}
-setInterval(__flushMessages, 10);
+  setInterval(flushMessages, 20);
+  return (function(message) {
+    queue.push(message);
+    if (queue.length > 200) {
+      flushMessages();
+    }
+  });
+})());
 
 function _addEventListener(name, func, hook) {
   var listeners = this._listeners;
@@ -104,22 +106,50 @@ function keyForward(p, func, key, keyCode, keyPressed) {
   p[func]();
 }
 
+function mouseForward(p, func, pmouseX, pmouseY, mouseX, mouseY, mouseButton, mousePressed, mouseDragging, mouseScroll) {
+  p.pmouseX = pmouseX;
+  p.pmouseY = pmouseY;
+  p.mouseX = mouseX;
+  p.mouseY = mouseY;
+  p.mouseButton = mouseButton;
+  p.__mousePressed = mousePressed;
+  p.mouseDragging = mouseDragging;
+  p.mouseScroll = mouseScroll;
+  if (p[func]) {
+    p[func]();
+  }
+}
+
+
 addEventListener("message", function(e) {
-  var data = e.data;
-  __currentInstanceId = e.data.instance;
-  var p = e.data.instance && data.type !== "new" ? __instances[e.data.instance] : null;
-  switch(data.type) {
-  case "Processing":
-    break;
-  case "new":
-    createNewInstance(data.instance, data.canvas, data.code);
-    break;
-  case "keyForward":
-    keyForward(p, data.func, data.key, data.keyCode, data.keyPressed);
-    break;
-  case "updateImage":
-    __images[data.image].__load(data.width, data.height, data.isRemote, data.data);
-    break;
+  for (var i = 0, l = e.data.length; i < l; ++i) {
+    try {
+      var data = e.data[i];
+      __currentInstanceId = data.instance;
+      var p = data.instance !== void(0) && data.type !== "new" ? __instances[data.instance] : null;
+      switch(data.type) {
+      case "Processing":
+        break;
+      case "new":
+        createNewInstance(data.instance, data.canvas, data.code);
+        break;
+      case "keyForward":
+        keyForward(p, data.func, data.key, data.keyCode, data.keyPressed);
+        break;
+      case "mouseForward":
+        mouseForward(p, data.func, data.pmouseX, data.pmouseY, data.mouseX, data.mouseY, 
+          data.mouseButton, data.mousePressed, data.mouseDragging, data.mouseScroll);
+        break;
+      case "updateImage":
+        __images[data.image].__load(data.width, data.height, data.isRemote, data.data);
+        break;
+      }
+
+    }
+    catch(e)
+    {
+        __postMessage({type:"log.print", message: e.toString() + " @" + e.lineNumber });
+    }
   }
 }, false);
 
@@ -178,7 +208,7 @@ function __setupRemoting(p, instanceId) {
   __instances[instanceId] = p;
   var canvas = p.externals.canvas;
 
-  var forwarded = "shapeMode, cursor, noCursor, link, beginDraw, endDraw, disableContextMenu, enableContextMenu, status, ambientLight, directionalLight, lightFalloff, lightSpecular, lights, pointLight, noLights, spotLight, beginCamera, endCamera, camera, perspective, frustum, ortho, printProjection, printCamera, box, sphereDetail, sphere, modelX, modelY, modelZ, ambient, emissive, shininess, specular, screenX, screenY, screenZ, fill, noFill, stroke, noStroke, strokeWeight, strokeCap, strokeJoin, smooth, noSmooth, point, beginShape, vertex, endShape, bezierVertex, texture, textureMode, curveVertex, curve, curveTightness, curveDetail, rectMode, imageMode, ellipseMode, arc, line, bezier, bezierDetail, bezierPoint, bezierTangent, curvePoint, curveTangent, triangle, quad, rect, ellipse, normal, set, hint, background, image, clear, tint, noTint, copy, blend, filter, shared, filter_new_scanline, filter_bilinear, blit_resize, textFont, textSize, textAlign, textWidth, textLeading, textAscent, textDescent, glyphLook, text, textMode".split(/,\s+/g);
+  var forwarded = "shapeMode, cursor, noCursor, link, beginDraw, endDraw, disableContextMenu, enableContextMenu, status, ambientLight, directionalLight, lightFalloff, lightSpecular, lights, pointLight, noLights, spotLight, beginCamera, endCamera, camera, perspective, frustum, ortho, printProjection, printCamera, box, sphereDetail, sphere, modelX, modelY, modelZ, ambient, emissive, shininess, specular, screenX, screenY, screenZ, fill, noFill, stroke, noStroke, strokeWeight, strokeCap, strokeJoin, smooth, noSmooth, point, beginShape, vertex, endShape, bezierVertex, texture, textureMode, curveVertex, curve, curveTightness, curveDetail, rectMode, imageMode, ellipseMode, arc, line, bezier, bezierDetail, bezierPoint, bezierTangent, curvePoint, curveTangent, triangle, quad, rect, ellipse, normal, set, hint, background, image, clear, tint, noTint, copy, blend, filter, shared, filter_new_scanline, filter_bilinear, blit_resize, textFont, textSize, textAlign, textWidth, textLeading, textAscent, textDescent, glyphLook, printMatrix, translate, scale, pushMatrix, popMatrix, resetMatrix, applyMatrix, rotateX, rotateZ, rotateY, rotate, pushStyle, popStyle, text, textMode".split(/,\s+/g);
 
   function createForwardProxy(func) {
     return (function() {
@@ -234,7 +264,7 @@ function __setupRemoting(p, instanceId) {
 /*
 safe: externals, name, use3DContext, focused, pmouseX, pmouseY, mouseX, mouseY, mouseButton, mouseScroll, mouseClicked, mouseDragged, mouseMoved, mousePressed, mouseReleased, mouseScrolled, key, keyCode, keyPressed, keyReleased, keyTyped, draw, setup, __mousePressed, __keyPressed, __frameRate, 
 frameCount, width, height, defineProperty, Character, PShape, PShapeSVG, XMLElement, PMatrix2D, PMatrix3D, PMatrixStack, split, splitTokens, 
-append, concat, sort, splice, subset, join, shorten, expand, arrayCopy, reverse, mix, peg, modes, color, brightness, saturation, hue, red, green, blue, alpha, lerpColor, defaultColor, colorMode, blendColor, printMatrix, translate, scale, pushMatrix, popMatrix, resetMatrix, applyMatrix, rotateX, rotateZ, rotateY, rotate, pushStyle, popStyle, year, month, day, hour, minute, second, millis, redraw, noLoop, loop, frameRate, exit, binary, unbinary, nf, nfs, nfp, nfc, hex, unhex, loadStrings, loadBytes, matchAll, match, console, str, trim, boolean, byte, char, float, int, __int_cast, abs, ceil, constrain, dist, exp, floor, lerp, log, mag, map, max, min, norm, pow, round, sq, sqrt, acos, asin, atan, atan2, cos, degrees, radians, sin, tan, random, randomSeed, Random, noise, noiseDetail, noiseSeed, imageData, extendClassChain, addMethod, createJavaArray, intersect, print, println
+append, concat, sort, splice, subset, join, shorten, expand, arrayCopy, reverse, mix, peg, modes, color, brightness, saturation, hue, red, green, blue, alpha, lerpColor, defaultColor, colorMode, blendColor, year, month, day, hour, minute, second, millis, redraw, noLoop, loop, frameRate, exit, binary, unbinary, nf, nfs, nfp, nfc, hex, unhex, loadStrings, loadBytes, matchAll, match, console, str, trim, boolean, byte, char, float, int, __int_cast, abs, ceil, constrain, dist, exp, floor, lerp, log, mag, map, max, min, norm, pow, round, sq, sqrt, acos, asin, atan, atan2, cos, degrees, radians, sin, tan, random, randomSeed, Random, noise, noiseDetail, noiseSeed, imageData, extendClassChain, addMethod, createJavaArray, intersect, print, println
 
 undecided: breakShape, glyphTable, Import, saveStrings, save, saveFrame, loadGlyphs, createGraphics, loadFont, createFont, PFont, shape, loadShape, image
 */

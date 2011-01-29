@@ -5,8 +5,15 @@ function RemoteProcessing(canvas, code) {
   this.instanceId = nextInstanceId;
 
   function keyEventForward(func) {
-    RemoteProcessing.worker.postMessage({
+    RemoteProcessing.postMessage({
       type: "keyForward", func: func, instance: nextInstanceId, key: p.key, keyCode: p.keyCode, keyPressed: p.__keyPressed
+    });
+  }
+  function mouseEventForward(func) {
+    RemoteProcessing.postMessage({
+      type: "mouseForward", func: func, instance: nextInstanceId, 
+      pmouseX: p.mouseX, pmouseY: p.pmouseY, mouseX: p.mouseX, mouseY: p.mouseY,
+      mouseButton: p.mouseButton, mousePressed: p.__mousePressed, mouseDragging: p.mouseDragging, mouseScroll: p.mouseScroll
     });
   }
   function attach(p) {
@@ -19,10 +26,28 @@ function RemoteProcessing(canvas, code) {
     p.keyTyped = function() {
       keyEventForward("keyTyped");
     };
+    p.mouseMoved = function() {
+      mouseEventForward("mouseMoved");
+    };
+    p.mouseClicked = function() {
+      mouseEventForward("mouseClicked");
+    };
+    p.mousePressed = function() {
+      mouseEventForward("mousePressed");
+    };
+    p.mouseReleased = function() {
+      mouseEventForward("mouseReleased");
+    };
+    p.mouseDragged = function() {
+      mouseEventForward("mouseDragged");
+    };
+    p.mouseScrolled = function() {
+      mouseEventForward("mouseScrolled");
+    };
   }
 
   RemoteProcessing.instances[nextInstanceId] = p;
-  RemoteProcessing.worker.postMessage({
+  RemoteProcessing.postMessage({
     type:"new", instance: nextInstanceId, code: code,
     canvas: { width: p.width, height: p.height, }
   });
@@ -41,7 +66,7 @@ function __updatePixels(p, pixels) {
 var __images = [];
 function __loadImage(p, instanceId, imageId, src) {
   var img = p.loadImage(src, void(0), function() {
-    RemoteProcessing.worker.postMessage({
+    RemoteProcessing.postMessage({
       type:"updateImage", instance: nextInstanceId, image: imageId,
       width: img.width, height: img.height, 
       data: img.imageData, isRemote: img.isRemote
@@ -74,8 +99,22 @@ RemoteProcessing.worker = ((function() {
       }
     }
   }, false);
-  w.postMessage({type:"Processing"});
+  w.postMessage([{type:"Processing"}]);
   return w;
 })());
-
+RemoteProcessing.postMessage = ((function() {
+  var queue = [];
+  function flushMessages() {
+    if (queue.length === 0) return;
+    RemoteProcessing.worker.postMessage(queue);
+    queue = [];
+  }
+  setInterval(flushMessages, 20);
+  return function(message) {
+    queue.push(message);
+    if (queue.length > 100) {
+      flushMessages();
+    }
+  };
+})());
 

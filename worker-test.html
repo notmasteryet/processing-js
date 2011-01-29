@@ -4,49 +4,39 @@
 <body style="background-color:blue">
 
 <script id="sample" type="application/processing">
-float increment = 0.04;
-// The noise function's 3rd argument, a global variable that increments once per cycle
-float zoff = 0.0;  
-// We will increment zoff differently than xoff and yoff
-float zincrement = 0.08; 
+float[] x = new float[2];
+float[] y = new float[2];
+float segLength = 50;
 
 void setup() {
-  size(50,50);
-  frameRate(8);
+  size(200, 200);
+  smooth(); 
+  strokeWeight(20.0);
+  stroke(0, 100);
+  frameRate(10);
 }
 
 void draw() {
-  background(0);
-  
-  // Optional: adjust noise detail here
-  // noiseDetail(8,0.65f);
-  
-  loadPixels();
+  background(226);
+  dragSegment(0, mouseX, mouseY);
+  dragSegment(1, x[0], y[0]);
+}
 
-  float xoff = 0.0; // Start xoff at 0
-  
-  // For every x,y coordinate in a 2D space, calculate a noise value and produce a brightness value
-  for (int x = 0; x < width; x++) {
-    xoff += increment;   // Increment xoff 
-    float yoff = 0.0f;   // For every xoff, start yoff at 0
-    for (int y = 0; y < height; y++) {
-      yoff += increment; // Increment yoff
-      
-      // Calculate noise and scale by 255
-      float bright = noise(xoff,yoff,zoff)*255;
+void dragSegment(int i, float xin, float yin) {
+  float dx = xin - x[i];
+  float dy = yin - y[i];
+  float angle = atan2(dy, dx);  
+  x[i] = xin - cos(angle) * segLength;
+  y[i] = yin - sin(angle) * segLength;
+  segment(x[i], y[i], angle);
+}
 
-      // Try using this line instead
-      //float bright = random(0,255);
-      
-      // Set each pixel onscreen to a grayscale value
-      pixels[x+y*width] = color(bright,bright,bright);
-    }
-  }
-  updatePixels();
-  
-  zoff += zincrement; // Increment zoff
-  
-  
+void segment(float x, float y, float a) {
+  pushMatrix();
+  translate(x, y);
+  rotate(a);
+  line(0, 0, segLength, 0);
+  popMatrix();
 }
 </script>
 
