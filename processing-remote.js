@@ -1,3 +1,13 @@
+var workerScriptUrl = ((function() {
+  var lastDOMElement = document.body ? document.body :
+    document.getElementsByTagName("head")[0];
+  while (lastDOMElement.lastChild) {
+    lastDOMElement = lastDOMElement.lastChild;
+  }
+  var url = lastDOMElement.src;
+  return url.substring(0, url.lastIndexOf('/') + 1) + "processing-worker.js";
+})());
+
 function RemoteProcessing(canvas, code) {
   var nextInstanceId = RemoteProcessing.instances.length;
   var p = new Processing(canvas, attach);
@@ -65,9 +75,9 @@ function __updatePixels(p, pixels) {
 
 var __images = [];
 function __loadImage(p, instanceId, imageId, src) {
-  var img = p.loadImage(src, void(0), function() {
+  var img = p.loadImage(src, "", function() {
     RemoteProcessing.postMessage({
-      type:"updateImage", instance: nextInstanceId, image: imageId,
+      type:"updateImage", instance: instanceId, image: imageId,
       width: img.width, height: img.height, 
       data: img.imageData, isRemote: img.isRemote
     });
@@ -77,7 +87,7 @@ function __loadImage(p, instanceId, imageId, src) {
 
 RemoteProcessing.instances = [];
 RemoteProcessing.worker = ((function() {
-  var w = new Worker("processing-worker.js");
+  var w = new Worker(workerScriptUrl);
   w.addEventListener("message", function(e) {
     for (var i = 0, l = e.data.length; i < l; ++i) {
       var data = e.data[i];
@@ -93,8 +103,17 @@ RemoteProcessing.worker = ((function() {
          __updatePixels(p, data.data);
          break;
       case "loadImage":
-         __loadImage(p, data.id, data.src);
+         __loadImage(p, data.instance, data.image, data.src);
+         break;
       case "updateImage":
+         __updateImage(p, data.image, data.data);
+         break;
+      case "image":
+         var args = data.args;
+         args[0] = __images[args[0]];
+         p.image.apply(p, args);
+         break;
+      default:
          throw "Not implemented";
       }
     }

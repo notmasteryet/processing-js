@@ -1,0 +1,18 @@
+<script type="text/javascript" src="../../processing.js"></script>
+<script type="text/javascript" src="../../processing-remote.js"></script>
+
+<body style="background-color:blue">
+<h1>image() remoting</h1>
+<script id="sample" type="application/processing">
+/* @pjs preload="pjs.png"; */
+PImage b;
+b = loadImage("pjs.png");
+image(b, 0, 0);
+</script>
+
+<canvas id="canvas1" width="200" height="200"></canvas>
+<script>
+  var p = new RemoteProcessing(document.getElementById("canvas1"), document.getElementById("sample").text);
+</script>
+
+</body>

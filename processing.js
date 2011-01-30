@@ -12937,30 +12937,6 @@
         }
       };
 
-      // These are intentionally left blank for PImages, we work live with pixels and draw as necessary
-      /**
-      * @member PImage
-      * Loads the pixel data for the image into its pixels[] array. This function must always be called
-      * before reading from or writing to pixels[].
-      * Certain renderers may or may not seem to require loadPixels() or updatePixels(). However, the
-      * rule is that any time you want to manipulate the pixels[] array, you must first call loadPixels(),
-      * and after changes have been made, call updatePixels(). Even if the renderer may not seem to use
-      * this function in the current Processing release, this will always be subject to change.
-      */
-      this.loadPixels = function() {};
-
-      /**
-      * @member PImage
-      * Updates the image with the data in its pixels[] array. Use in conjunction with loadPixels(). If
-      * you're only reading pixels from the array, there's no need to call updatePixels().
-      * Certain renderers may or may not seem to require loadPixels() or updatePixels(). However, the rule
-      * is that any time you want to manipulate the pixels[] array, you must first call loadPixels(), and
-      * after changes have been made, call updatePixels(). Even if the renderer may not seem to use this
-      * function in the current Processing release, this will always be subject to change.
-      * Currently, none of the renderers use the additional parameters to updatePixels().
-      */
-      this.updatePixels = function() {};
-
       this.toImageData = function() {
         if (this.isRemote) { // Remote images cannot access imageData, send source image instead
           return this.sourceImg;
@@ -12987,22 +12963,6 @@
         this.format = PConstants.ARGB;
       };
 
-      this.fromHTMLImageData = function(htmlImg) {
-        // convert an <img> to a PImage
-        var canvasData = getCanvasData(htmlImg);
-        try {
-          var imageData = canvasData.context.getImageData(0, 0, htmlImg.width, htmlImg.height);
-          this.fromImageData(imageData);
-        } catch(e) {
-          if (htmlImg.width && htmlImg.height) {
-            this.isRemote = true;
-            this.width = htmlImg.width;
-            this.height = htmlImg.height;
-          }
-        }
-        this.sourceImg = htmlImg;
-      };
-
       if (arguments.length === 1) {
         // convert an <img> to a PImage
         this.fromHTMLImageData(arguments[0]);
@@ -13017,6 +12977,46 @@
         this.imageData = utilityContext2d.createImageData(1, 1);
         this.format = PConstants.ARGB;
       }
+    };
+
+    // These are intentionally left blank for PImages, we work live with pixels and draw as necessary
+    /**
+    * @member PImage
+    * Loads the pixel data for the image into its pixels[] array. This function must always be called
+    * before reading from or writing to pixels[].
+    * Certain renderers may or may not seem to require loadPixels() or updatePixels(). However, the
+    * rule is that any time you want to manipulate the pixels[] array, you must first call loadPixels(),
+    * and after changes have been made, call updatePixels(). Even if the renderer may not seem to use
+    * this function in the current Processing release, this will always be subject to change.
+    */
+    PImage.prototype.loadPixels = function() {};
+
+    /**
+    * @member PImage
+    * Updates the image with the data in its pixels[] array. Use in conjunction with loadPixels(). If
+    * you're only reading pixels from the array, there's no need to call updatePixels().
+    * Certain renderers may or may not seem to require loadPixels() or updatePixels(). However, the rule
+    * is that any time you want to manipulate the pixels[] array, you must first call loadPixels(), and
+    * after changes have been made, call updatePixels(). Even if the renderer may not seem to use this
+    * function in the current Processing release, this will always be subject to change.
+    * Currently, none of the renderers use the additional parameters to updatePixels().
+    */
+    PImage.prototype.updatePixels = function() {};
+
+    PImage.prototype.fromHTMLImageData = function(htmlImg) {
+      // convert an <img> to a PImage
+      var canvasData = getCanvasData(htmlImg);
+      try {
+        var imageData = canvasData.context.getImageData(0, 0, htmlImg.width, htmlImg.height);
+        this.fromImageData(imageData);
+      } catch(e) {
+        if (htmlImg.width && htmlImg.height) {
+          this.isRemote = true;
+          this.width = htmlImg.width;
+          this.height = htmlImg.height;
+        }
+      }
+      this.sourceImg = htmlImg;
     };
 
     p.PImage = PImage;

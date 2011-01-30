@@ -10,7 +10,7 @@ var __postMessage = ((function() {
   setInterval(flushMessages, 20);
   return (function(message) {
     queue.push(message);
-    if (queue.length > 200) {
+    if (queue.length > 100) {
       flushMessages();
     }
   });
@@ -93,6 +93,7 @@ var __instances = [];
 
 function createNewInstance(instanceId, canvas, code) {
   try {
+    __currentInstanceId = instanceId;
     var p = new Processing(new Canvas(canvas), "__setupRemoting(arguments[0], " + instanceId + ");\n" + code);
   } catch(e) {
     __postMessage({type:"log.print", message: e.toString() + " @" + e.lineNumber });
@@ -126,7 +127,8 @@ addEventListener("message", function(e) {
     try {
       var data = e.data[i];
       __currentInstanceId = data.instance;
-      var p = data.instance !== void(0) && data.type !== "new" ? __instances[data.instance] : null;
+      var p;
+      if (data.instance !== void(0)) { p = __instances[data.instance]; }
       switch(data.type) {
       case "Processing":
         break;
@@ -168,12 +170,24 @@ catch(e)
     __postMessage({type: "log.print", message: "Processing.js remoting: " + e.message});
 }
 
-var __imageNextId = 0;
+function __defineProperty(obj, name, desc) {
+  if("defineProperty" in Object) {
+    Object.defineProperty(obj, name, desc);
+  } else {
+    if (desc.hasOwnProperty("get")) {
+      obj.__defineGetter__(name, desc.get);
+    }
+    if (desc.hasOwnProperty("set")) {
+      obj.__defineSetter__(name, desc.set);
+    }
+  }
+};
+
+var __imageNextId = 0, __images = [];
 function Image() {
   var instanceId = __currentInstanceId;
-  var p = __instances[instanceId];
   var src;
-  p.defineProperty(this, "src", {
+  __defineProperty(this, "src", {
     get: function() { return src; },
     set: function(value) { 
       if (src !== value) {
@@ -182,6 +196,7 @@ function Image() {
       }
     }
   });
+  __images[__imageNextId] = this;
   this.id = __imageNextId++;
   this.instanceId = instanceId;
   this.__load = function(width, height, isRemote, data) {
@@ -202,6 +217,10 @@ function __forwardToParent(instanceId, func, args) {
     ar[i] = args[i];
   }
   __postMessage({type:"forward", instance: instanceId, func: func, args: ar});
+}
+
+function trace(msg) {
+__postMessage({type:"log.print", message: "trace: " + msg });
 }
 
 function __setupRemoting(p, instanceId) {
@@ -226,21 +245,16 @@ function __setupRemoting(p, instanceId) {
     p.height = height;
     __forwardToParent(instanceId, "size", arguments);
   };
-  var _oldLoadImage = p.loadImage;
-  p.loadImage = p.requestImage = function(url, type, callback) {
-    var result = _oldLoadImage.apply(p, arguments);
-    result.loadPixels = function() {};
-    result.updatePixels = function() {
-      __postMessage({type:"updateImage", instance: instanceId, pimage: this.id, data: this.imageData });
-    };
-    result.fromHTMLImageData = function(img) {
-      this.id = img.id;
-      this.isRemote = img.isRemote;
-      this.width = img.width;
-      this.height = img.height;
-      this.imageData = img.imageData;
-    };
-    return result;
+  p.PImage.prototype.loadPixels = function() {};
+  p.PImage.prototype.updatePixels = function() {
+    __postMessage({type:"updateImage", image: this.id, data: this.imageData });
+  };
+  p.PImage.prototype.fromHTMLImageData = function(img) {
+    this.id = img.id;
+    this.isRemote = img.isRemote;
+    this.width = img.width;
+    this.height = img.height;
+    this.imageData = img.imageData;
   };
   p.loadPixels = function() { 
     var data = [];
@@ -249,6 +263,13 @@ function __setupRemoting(p, instanceId) {
   };
   p.updatePixels = function() {
     __postMessage({type:"updatePixels", instance: instanceId, data: p.imageData.data });
+  };
+  p.image = function(img) {
+    var args = [img.id, arguments[1], arguments[2]];
+    if (arguments.length > 3) {
+      args.push(arguments[3]); args.push(arguments[4]);
+    }
+    __postMessage({type:"image", instance: instanceId, args: args});
   };
 
   //forbiden: get, pixels.getPixel, PImage, createImage
