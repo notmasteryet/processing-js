@@ -8031,7 +8031,7 @@
       }
     }
 
-    p['boolean'] = function(val) {
+    p.parseBoolean = function(val) {
       if (val instanceof Array) {
         var ret = [];
         for (var i = 0; i < val.length; i++) {
@@ -8044,7 +8044,7 @@
     };
 
     // a byte is a number between -128 and 127
-    p['byte'] = function(aNumber) {
+    p.parseByte = function(aNumber) {
       if (aNumber instanceof Array) {
         var bytes = [];
         for (var i = 0; i < aNumber.length; i++) {
@@ -8056,7 +8056,7 @@
       }
     };
 
-    p['char'] = function(key) {
+    p.parseChar = function(key) {
       if (typeof key === "number") {
         return new Char(String.fromCharCode(key & 0xFFFF));
       } else if (key instanceof Array) {
@@ -8086,7 +8086,7 @@
       }
     }
 
-    p['float'] = function(val) {
+    p.parseFloat = function(val) {
       if (val instanceof Array) {
         var ret = [];
         for (var i = 0; i < val.length; i++) {
@@ -8111,7 +8111,7 @@
       }
     }
 
-    p['int'] = function(val) {
+    p.parseInt = function(val) {
       if (val instanceof Array) {
         var ret = [];
         for (var i = 0; i < val.length; i++) {
@@ -15715,13 +15715,15 @@
       if (typeof bounds[0] === 'number') {
         var itemsCount = 0 | bounds[0];
         if (bounds.length <= 1) {
-          if (type === "int") {
+          /* if (type === "int") {
             result = new Int32Array(itemsCount);
           } else if (type === "float") {
             result = new Float32Array(itemsCount);
           } else {
             result = new Array(itemsCount);
-          }
+          } */
+          result = [];
+          result.length = itemsCount;
           for (var i = 0; i < itemsCount; ++i) {
             result[i] = 0;
           }
@@ -16255,8 +16257,8 @@
       "arc", "arrayCopy", "asin", "atan", "atan2", "background",
       "beginCamera", "beginDraw", "beginShape", "bezier", "bezierDetail",
       "bezierPoint", "bezierTangent", "bezierVertex", "binary", "blend",
-      "blendColor", "blit_resize", "blue", "boolean", "box", "breakShape",
-      "brightness", "byte", "camera", "ceil", "char", "Character", "clear",
+      "blendColor", "blit_resize", "blue", "box", "breakShape",
+      "brightness", "camera", "ceil", "Character", "clear",
       "color", "colorMode", "concat", "console", "constrain", "copy", "cos",
       "createFont", "createGraphics", "createImage", "cursor", "curve",
       "curveDetail", "curvePoint", "curveTangent", "curveTightness",
@@ -16264,10 +16266,10 @@
       "disableContextMenu", "dist", "draw", "ellipse", "ellipseMode", "emissive",
       "enableContextMenu", "endCamera", "endDraw", "endShape", "exit", "exp",
       "expand", "externals", "fill", "filter", "filter_bilinear",
-      "filter_new_scanline", "float", "floor", "focused", "frameCount",
+      "filter_new_scanline", "floor", "focused", "frameCount",
       "frameRate", "frustum", "get", "glyphLook", "glyphTable", "green",
       "height", "hex", "hint", "hour", "hue", "image", "imageMode",
-      "Import", "int", "intersect", "join", "key", "keyCode", "keyPressed",
+      "Import", "intersect", "join", "key", "keyCode", "keyPressed",
       "keyReleased", "keyTyped", "lerp", "lerpColor", "lightFalloff", "lights",
       "lightSpecular", "line", "link", "loadBytes", "loadFont", "loadGlyphs",
       "loadImage", "loadPixels", "loadShape", "loadStrings", "log", "loop",
@@ -16277,7 +16279,8 @@
       "mouseReleased", "mouseScroll", "mouseScrolled", "mouseX", "mouseY",
       "name", "nf", "nfc", "nfp", "nfs", "noCursor", "noFill", "noise",
       "noiseDetail", "noiseSeed", "noLights", "noLoop", "norm", "normal",
-      "noSmooth", "noStroke", "noTint", "ortho", "peg", "perspective", "PFont", "PImage",
+      "noSmooth", "noStroke", "noTint", "ortho", "parseBoolean", "parseByte", "parseChar", 
+      "parseFloat", "parseInt", "peg", "perspective", "PFont", "PImage",
       "pixels", "PMatrix2D", "PMatrix3D", "PMatrixStack", "pmouseX", "pmouseY",
       "point", "pointLight", "popMatrix", "popStyle", "pow", "print",
       "printCamera", "println", "printMatrix", "printProjection", "PShape","PShapeSVG",
@@ -16606,6 +16609,10 @@
       // the Processing.js source, replace frameRate so it isn't
       // confused with frameRate(), as well as keyPressed and mousePressed
       s = s.replace(/\b(frameRate|keyPressed|mousePressed)\b(?!\s*"B)/g, "__$1");
+      // "boolean", "byte", "int", etc. => "parseBoolean", "parseByte", "parseInt", etc.
+      s = s.replace(/\b(boolean|byte|char|float|int)\s*"B/g, function(all, name) {
+        return "parse" + name.substring(0, 1).toUpperCase() + name.substring(1) + "\"B";
+      });
       // "pixels" replacements:
       //   pixels[i] = c => pixels.setPixel(i,c) | pixels[i] => pixels.getPixel(i)
       //   pixels.length => pixels.getLength()
