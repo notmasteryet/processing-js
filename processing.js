@@ -1259,9 +1259,9 @@
     // The current animation frame
     p.frameCount      = 0;
 
-    // The height/width of the canvas
-    p.width           = curElement.width  - 0;
-    p.height          = curElement.height - 0;
+    // The default height/width of the canvas
+    p.width           = 100;
+    p.height          = 100;
 
     p.defineProperty = function(obj, name, desc) {
       if("defineProperty" in Object) {
@@ -1277,8 +1277,7 @@
     };
 
     // "Private" variables used to maintain state
-    var curContext,
-        curSketch,
+    var curSketch,
         online = true,
         doFill = true,
         fillStyle = [1.0, 1.0, 1.0, 1.0],
@@ -1370,15 +1369,29 @@
         baselineOffset = 0.2, // percent
         tMode = PConstants.MODEL,
         // Pixels cache
-        originalContext,
-        proxyContext = null,
-        isContextReplaced = false,
+        resetCrispContext = function (){},
+        isCrispContextUsed = false,
+        getCurrentContext,
+        currentContext,
         setPixelsCached,
         maxPixelsCached = 1000,
         codedKeys = [ PConstants.SHIFT, PConstants.CONTROL, PConstants.ALT, PConstants.CAPSLK, PConstants.PGUP, PConstants.PGDN,
                       PConstants.END, PConstants.HOME, PConstants.LEFT, PConstants.UP, PConstants.RIGHT, PConstants.DOWN, PConstants.NUMLK,
                       PConstants.INS, PConstants.F1, PConstants.F2, PConstants.F3, PConstants.F4, PConstants.F5, PConstants.F6, PConstants.F7,
                       PConstants.F8, PConstants.F9, PConstants.F10, PConstants.F11, PConstants.F12 ];
+
+    // Context manipulation functions
+    function swapContext(newContext) {
+      var oldContext = currentContext;
+      currentContext = newContext;
+      getCurrentContext = function() { return newContext; };
+      return oldContext;
+    }
+
+    p.defineProperty(p.externals, "context", {
+      get: function (){ return getCurrentContext(); },
+      enumerable: true
+    });
 
     // Get padding and border style widths for mouse offsets
     var stylePaddingLeft, stylePaddingTop, styleBorderLeft, styleBorderTop;
@@ -1417,12 +1430,12 @@
         manipulatingCamera = false,
         frustumMode = false,
         cameraFOV = 60 * (Math.PI / 180),
-        cameraX = curElement.width / 2,
-        cameraY = curElement.height / 2,
+        cameraX = p.width / 2,
+        cameraY = p.height / 2,
         cameraZ = cameraY / Math.tan(cameraFOV / 2),
         cameraNear = cameraZ / 10,
         cameraFar = cameraZ * 10,
-        cameraAspect = curElement.width / curElement.height;
+        cameraAspect = p.width / p.height;
 
     var vertArray = [],
         curveVertArray = [],
@@ -1952,6 +1965,7 @@
      * @see uniformMatrix
     */
     function uniformf(cacheId, programObj, varName, varValue) {
+      var curContext = getCurrentContext();
       var varLocation = curContextCache.locations[cacheId];
       if(varLocation === undef) {
         varLocation = curContext.getUniformLocation(programObj, varName);
@@ -1991,6 +2005,7 @@
      * @see uniformMatrix
     */
     function uniformi(cacheId, programObj, varName, varValue) {
+      var curContext = getCurrentContext();
       var varLocation = curContextCache.locations[cacheId];
       if(varLocation === undef) {
         varLocation = curContext.getUniformLocation(programObj, varName);
@@ -2029,6 +2044,7 @@
      * @see disableVertexAttribPointer
     */
     function vertexAttribPointer(cacheId, programObj, varName, size, VBO) {
+      var curContext = getCurrentContext();
       var varLocation = curContextCache.attributes[cacheId];
       if(varLocation === undef) {
         varLocation = curContext.getAttribLocation(programObj, varName);
@@ -2053,6 +2069,7 @@
      * @see vertexAttribPointer
     */
     function disableVertexAttribPointer(cacheId, programObj, varName){
+      var curContext = getCurrentContext();
       var varLocation = curContextCache.attributes[cacheId];
       if(varLocation === undef) {
         varLocation = curContext.getAttribLocation(programObj, varName);
@@ -2085,6 +2102,7 @@
      * @see uniformf
     */
     function uniformMatrix(cacheId, programObj, varName, transpose, matrix) {
+      var curContext = getCurrentContext();
       var varLocation = curContextCache.locations[cacheId];
       if(varLocation === undef) {
         varLocation = curContext.getUniformLocation(programObj, varName);
@@ -2521,6 +2539,7 @@
       pre: function() {
         if (this.matrix) {
           p.pushMatrix();
+          var curContext = getCurrentContext(); /// ?
           curContext.transform(this.matrix.elements[0],
                                this.matrix.elements[3],
                                this.matrix.elements[1],
@@ -6847,10 +6866,12 @@
     ////////////////////////////////////////////////////////////////////////////
 
     function saveContext() {
+      var curContext = getCurrentContext();
       curContext.save();
     }
 
     function restoreContext() {
+      var curContext = getCurrentContext();
       curContext.restore();
       isStrokeDirty = true;
       isFillDirty = true;
@@ -6898,6 +6919,7 @@
         forwardTransform.translate(x, y, z);
         reverseTransform.invTranslate(x, y, z);
       } else {
+        var curContext = getCurrentContext();
         curContext.translate(x, y);
       }
     };
@@ -6931,6 +6953,7 @@
         forwardTransform.scale(x, y, z);
         reverseTransform.invScale(x, y, z);
       } else {
+        var curContext = getCurrentContext();
         curContext.scale(x, y || x);
       }
     };
@@ -6993,6 +7016,7 @@
         forwardTransform.reset();
         reverseTransform.reset();
       } else {
+        var curContext = getCurrentContext();
         curContext.setTransform(1,0,0,1,0,0);
       }
     };
@@ -7133,6 +7157,7 @@
         forwardTransform.rotateZ(angleInRadians);
         reverseTransform.invRotateZ(angleInRadians);
       } else {
+        var curContext = getCurrentContext();
         curContext.rotate(angleInRadians);
       }
     };
@@ -7360,6 +7385,7 @@
       inDraw = true;
 
       if (p.use3DContext) {
+        var curContext = getCurrentContext();
         // even if the color buffer isn't cleared with background(),
         // the depth buffer needs to be cleared regardless.
         curContext.clear(curContext.DEPTH_BUFFER_BIT);
@@ -9077,6 +9103,7 @@
     // Set default background behavior for 2D and 3D contexts
     var refreshBackground = function() {
       if (!curSketch.options.isTransparent) {
+        var curContext = getCurrentContext();
         if (p.use3DContext) {
           // fill background default opaque gray
           curContext.clearColor(204 / 255, 204 / 255, 204 / 255, 1.0);
@@ -9106,8 +9133,13 @@
     */
     p.size = (function() {
       var size3DCalled = false;
+      var curContext;
 
       return function size(aWidth, aHeight, aMode) {
+        if (!(aWidth > 0 && aHeight > 0)) {
+          throw "Invalid width or height arguments";
+        }
+
         if (aMode && (aMode === PConstants.WEBGL)) {
           if (size3DCalled) {
             throw "Multiple calls to size() for 3D renders are not allowed.";
@@ -9121,11 +9153,11 @@
             // 3D sketches, browsers will either not render or render the
             // scene incorrectly. To fix this, we need to adjust the
             // width and height attributes of the canvas.
-            if (curElement.width !== aWidth || curElement.height !== aHeight) {
-              curElement.setAttribute("width", aWidth);
-              curElement.setAttribute("height", aHeight);
-            }
+            curElement.setAttribute("width", aWidth);
+            curElement.setAttribute("height", aHeight);
+
             curContext = curElement.getContext("experimental-webgl");
+            swapContext(curContext);
             p.use3DContext = true;
             canTex = curContext.createTexture(); // texture
             textTex = curContext.createTexture(); // texture
@@ -9141,7 +9173,7 @@
               cosLUT[i] = p.cos(i * (PConstants.PI / 180) * 0.5);
             }
             // Set defaults
-            curContext.viewport(0, 0, curElement.width, curElement.height);
+            curContext.viewport(0, 0, aWidth, aHeight);
             curContext.enable(curContext.DEPTH_TEST);
             curContext.enable(curContext.BLEND);
             curContext.blendFunc(curContext.SRC_ALPHA, curContext.ONE_MINUS_SRC_ALPHA);
@@ -9245,14 +9277,8 @@
           }
           p.stroke(0);
           p.fill(255);
-        } else {
-          if (curContext === undef) {
-            // size() was called without p.init() default context, ie. p.createGraphics()
-            curContext = curElement.getContext("2d");
-            p.use3DContext = false;
-            userMatrixStack = new PMatrixStack();
-            modelView = new PMatrix2D();
-          }
+        } else {        
+          curContext = getCurrentContext();
         }
 
         // The default 2d context has already been created in the p.init() stage if
@@ -9271,8 +9297,8 @@
           curElement.style.removeProperty("height");
         }
 
-        curElement.width = p.width = aWidth || 100;
-        curElement.height = p.height = aHeight || 100;
+        curElement.width = p.width = aWidth;
+        curElement.height = p.height = aHeight;
 
         for (var j in props) {
           if (props) {
@@ -9288,9 +9314,6 @@
 
         // set 5% for pixels to cache (or 1000)
         maxPixelsCached = Math.max(1000, aWidth * aHeight * 0.05);
-
-        // Externalize the context
-        p.externals.context = curContext;
       };
     })();
 
@@ -9335,6 +9358,7 @@
         view.apply(modelView.array());
         view.mult(pos, pos);
 
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
         uniformf("lights.color.3d." + lightCount, programObject3D, "lights" + lightCount + ".color", [r/255, g/255, b/255]);
         uniformf("lights.position.3d." + lightCount, programObject3D, "lights" + lightCount + ".position", pos.array());
@@ -9377,6 +9401,7 @@
           throw "can only create " + PConstants.MAX_LIGHTS + " lights";
         }
 
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
 
         // We need to multiply the direction by the model view matrix, but
@@ -9423,6 +9448,7 @@
     */
     p.lightFalloff = function lightFalloff(constant, linear, quadratic) {
       if (p.use3DContext) {
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
         uniformf("falloff3d", programObject3D, "falloff", [constant, linear, quadratic]);
       }
@@ -9449,6 +9475,7 @@
     */
     p.lightSpecular = function lightSpecular(r, g, b) {
       if (p.use3DContext) {
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
         uniformf("specular3d", programObject3D, "specular", [r / 255, g / 255, b / 255]);
       }
@@ -9515,6 +9542,7 @@
         view.apply(modelView.array());
         view.mult(pos, pos);
 
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
         uniformf("lights.color.3d." + lightCount, programObject3D, "lights" + lightCount + ".color", [r / 255, g / 255, b / 255]);
         uniformf("lights.position.3d." + lightCount, programObject3D, "lights" + lightCount + ".position", pos.array());
@@ -9536,6 +9564,7 @@
     p.noLights = function noLights() {
       if (p.use3DContext) {
         lightCount = 0;
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
         uniformi("lightCount3d", programObject3D, "lightCount", lightCount);
       }
@@ -9576,6 +9605,7 @@
           throw "can only create " + PConstants.MAX_LIGHTS + " lights";
         }
 
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
 
         // place the point in view space once instead of once per vertex
@@ -9680,8 +9710,8 @@
     p.camera = function camera(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, upX, upY, upZ) {
       if (arguments.length === 0) {
         //in case canvas is resized
-        cameraX = curElement.width / 2;
-        cameraY = curElement.height / 2;
+        cameraX = p.width / 2;
+        cameraY = p.height / 2;
         cameraZ = cameraY / Math.tan(cameraFOV / 2);
         eyeX = cameraX;
         eyeY = cameraY;
@@ -9736,7 +9766,7 @@
         cameraZ = cameraY / Math.tan(cameraFOV / 2);
         cameraNear = cameraZ / 10;
         cameraFar = cameraZ * 10;
-        cameraAspect = curElement.width / curElement.height;
+        cameraAspect = p.width / p.height;
         fov = cameraFOV;
         aspect = cameraAspect;
         near = cameraNear;
@@ -9838,6 +9868,7 @@
      * @param {int|float} d  dimension of the box in the z-dimension
      */
     p.box = function(w, h, d) {
+      var curContext = getCurrentContext();
       if (p.use3DContext) {
         // user can uniformly scale the box by
         // passing in only one argument.
@@ -9994,6 +10025,7 @@
       sphereVerts.push(0);
 
       //set the buffer data
+      var curContext = getCurrentContext();
       curContext.bindBuffer(curContext.ARRAY_BUFFER, sphereBuffer);
       curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(sphereVerts), curContext.STATIC_DRAW);
     };
@@ -10084,6 +10116,7 @@
      * @param {int|float} r the radius of the sphere
      */
     p.sphere = function() {
+      var curContext = getCurrentContext();
       if (p.use3DContext) {
         var sRad = arguments[0], c;
 
@@ -10292,6 +10325,7 @@
 
       // either a shade of gray or a 'color' object.
       if (p.use3DContext) {
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
         uniformi("usingMat3d", programObject3D, "usingMat", true);
 
@@ -10342,6 +10376,7 @@
       var a = arguments;
 
       if (p.use3DContext) {
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
         uniformi("usingMat3d", programObject3D, "usingMat", true);
 
@@ -10376,6 +10411,7 @@
     */
     p.shininess = function shininess(shine) {
       if (p.use3DContext) {
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
         uniformi("usingMat3d", programObject3D, "usingMat", true);
         uniformf("shininess3d", programObject3D, "shininess", shine);
@@ -10422,6 +10458,7 @@
       var c = p.color.apply(this, arguments);
 
       if (p.use3DContext) {
+        var curContext = getCurrentContext();
         curContext.useProgram(programObject3D);
         uniformi("usingMat3d", programObject3D, "usingMat", true);
         uniformf("mat_specular3d", programObject3D, "mat_specular", p.color.toGLArray(c).slice(0, 3));
@@ -10569,6 +10606,7 @@
 
     function executeContextFill() {
       if(doFill) {
+        var curContext = getCurrentContext();
         if(isFillDirty) {
           curContext.fillStyle = p.color.toString(currentFillColor);
           isFillDirty = false;
@@ -10635,6 +10673,7 @@
 
     function executeContextStroke() {
       if(doStroke) {
+        var curContext = getCurrentContext();
         if(isStrokeDirty) {
           curContext.strokeStyle = p.color.toString(currentStrokeColor);
           isStrokeDirty = false;
@@ -10662,6 +10701,7 @@
     p.strokeWeight = function strokeWeight(w) {
       lineWidth = w;
 
+      var curContext = getCurrentContext();
       if (p.use3DContext) {
         curContext.useProgram(programObject2D);
         uniformf("pointSize2d", programObject2D, "pointSize", w);
@@ -10678,6 +10718,7 @@
      * @param {int} value Either SQUARE, PROJECT, or ROUND
      */
     p.strokeCap = function strokeCap(value) {
+      var curContext = getCurrentContext();
       curContext.lineCap = value;
     };
 
@@ -10689,6 +10730,7 @@
      * @param {int} value Either SQUARE, PROJECT, or ROUND
      */
     p.strokeJoin = function strokeJoin(value) {
+      var curContext = getCurrentContext();
       curContext.lineJoin = value;
     };
 
@@ -10703,6 +10745,7 @@
      */
     p.smooth = function() {
       curElement.style.setProperty("image-rendering", "optimizeQuality", "important");
+      var curContext = getCurrentContext();
       if (!p.use3DContext && "mozImageSmoothingEnabled" in curContext) {
         curContext.mozImageSmoothingEnabled = true;
       }
@@ -10715,6 +10758,7 @@
      */
     p.noSmooth = function() {
       curElement.style.setProperty("image-rendering", "optimizeSpeed", "important");
+      var curContext = getCurrentContext();
       if (!p.use3DContext && "mozImageSmoothingEnabled" in curContext) {
         curContext.mozImageSmoothingEnabled = false;
       }
@@ -10747,6 +10791,7 @@
      * @see #beginShape()
      */
     p.point = function point(x, y, z) {
+      var curContext = getCurrentContext();
       if (p.use3DContext) {
         var model = new PMatrix3D();
 
@@ -10915,6 +10960,7 @@
       proj.set(projection);
       proj.transpose();
 
+      var curContext = getCurrentContext();
       curContext.useProgram(programObjectUnlitShape);
       uniformMatrix("uViewUS", programObjectUnlitShape, "uView", false, view.array());
       uniformMatrix("uProjectionUS", programObjectUnlitShape, "uProjection", false, proj.array());
@@ -10942,6 +10988,7 @@
      */
     var line3D = function line3D(vArray, mode, cArray){
       var ctxMode;
+      var curContext = getCurrentContext();
       if (mode === "LINES"){
         ctxMode = curContext.LINES;
       }
@@ -10991,6 +11038,7 @@
      */
     var fill3D = function fill3D(vArray, mode, cArray, tArray){
       var ctxMode;
+      var curContext = getCurrentContext();
       if(mode === "TRIANGLES"){
         ctxMode = curContext.TRIANGLES;
       }
@@ -11065,6 +11113,7 @@
      * @see beginShape
      */
     p.endShape = function endShape(mode){
+      var curContext = getCurrentContext();
       var closeShape = mode === PConstants.CLOSE;
       var lineVertArray = [];
       var fillVertArray = [];
@@ -11825,6 +11874,7 @@
     // This method tries the new argument pattern first and falls back to the old version
     var executeTexImage2D = function () {
       var canvas2d = document.createElement('canvas');
+      var curContext = getCurrentContext();
 
       try { // new way.
         curContext.texImage2D(curContext.TEXTURE_2D, 0, curContext.RGBA, curContext.RGBA, curContext.UNSIGNED_BYTE, canvas2d);
@@ -11858,6 +11908,7 @@
      * @see vertex
     */
     p.texture = function(pimage) {
+      var curContext = getCurrentContext();
       if (pimage.localName === "canvas") {
         curContext.bindTexture(curContext.TEXTURE_2D, canTex);
         executeTexImage2D(pimage);
@@ -12287,6 +12338,7 @@
     */
     p.line = function line() {
       var x1, y1, z1, x2, y2, z2;
+      var curContext;
 
       if (p.use3DContext) {
         if (arguments.length === 6) {
@@ -12316,6 +12368,7 @@
         proj.set(projection);
         proj.transpose();
 
+        curContext = getCurrentContext();
         if (lineWidth > 0 && doStroke) {
           curContext.useProgram(programObject2D);
 
@@ -12358,6 +12411,7 @@
         }
 
         if (doStroke) {
+          curContext = getCurrentContext();
           curContext.beginPath();
           curContext.moveTo(x1 || 0, y1 || 0);
           curContext.lineTo(x2 || 0, y2 || 0);
@@ -12553,6 +12607,7 @@
     * @see quad
     */
     p.rect = function rect(x, y, width, height) {
+      var curContext;
       if (p.use3DContext) {
         // Modeling transformation
         var model = new PMatrix3D();
@@ -12571,6 +12626,7 @@
         proj.set(projection);
         proj.transpose();
 
+        curContext = getCurrentContext();
         if (lineWidth > 0 && doStroke) {
           curContext.useProgram(programObject2D);
           uniformMatrix("model2d", programObject2D, "model", false, model.array());
@@ -12643,6 +12699,7 @@
           return;
         }
 
+        curContext = getCurrentContext();
         curContext.beginPath();
 
         var offsetStart = 0;
@@ -12709,6 +12766,7 @@
       }
 
       var offsetStart = 0;
+      var curContext = getCurrentContext();
 
       // Shortcut for drawing a 2D circle
       if ((!p.use3DContext) && (width === height)) {
@@ -13378,6 +13436,7 @@
 
     function get$0() {
       //return a PImage of curContext
+      var curContext = getCurrentContext();
       var c = new PImage(p.width, p.height, PConstants.RGB);
       c.fromImageData(curContext.getImageData(0, 0, p.width, p.height));
       return c;
@@ -13387,12 +13446,13 @@
       // return the color at x,y (int) of curContext
       // create a PImage object of size 1x1 and return the int of the pixels array element 0
       if (x < p.width && x >= 0 && y >= 0 && y < p.height) {
-        if(isContextReplaced) {
+        if(isCrispContextUsed) {
           var offset = ((0|x) + p.width * (0|y))*4;
           data = p.imageData.data;
           return p.color.toInt(data[offset], data[offset+1],
                            data[offset+2], data[offset+3]);
         }
+        var curContext = getCurrentContext();
         // x,y is inside canvas space
         data = curContext.getImageData(0|x, 0|y, 1, 1).data;
         // changed for 0.9
@@ -13417,6 +13477,7 @@
     }
     function get$4(x, y, w, h) {
       // return a PImage of w and h from cood x,y of curContext
+      var curContext = getCurrentContext();
       var c = new PImage(w, h, PConstants.RGB);
       c.fromImageData(curContext.getImageData(x, y, w, h));
       return c;
@@ -13537,61 +13598,34 @@
     };
 
     // pixels caching
-    function resetContext() {
-      if(isContextReplaced) {
-        curContext = originalContext;
-        isContextReplaced = false;
-
-        p.updatePixels();
-      }
-    }
-    function SetPixelContextWrapper() {
-      function wrapFunction(newContext, name) {
-        function wrapper() {
-          resetContext();
-          curContext[name].apply(curContext, arguments);
-        }
-        newContext[name] = wrapper;
-      }
-      function wrapProperty(newContext, name) {
-        function getter() {
-          resetContext();
-          return curContext[name];
-        }
-        function setter(value) {
-          resetContext();
-          curContext[name] = value;
-        }
-        p.defineProperty(newContext, name, { get: getter, set: setter });
-      }
-      for(var n in curContext) {
-        if(typeof curContext[n] === 'function') {
-          wrapFunction(this, n);
-        } else {
-          wrapProperty(this, n);
-        }
-      }
-    }
-    function replaceContext() {
-      if(isContextReplaced) {
+    function useCrispContext() {
+      if(isCrispContextUsed) {
         return;
       }
       p.loadPixels();
-      if(proxyContext === null) {
-        originalContext = curContext;
-        proxyContext = new SetPixelContextWrapper();
-      }
-      isContextReplaced = true;
-      curContext = proxyContext;
+      var originalGetContext = getCurrentContext;
+      resetCrispContext = function (){
+        getCurrentContext = originalGetContext;
+        isCrispContextUsed = false;
+        resetCrispContext = function (){};
+
+        p.updatePixels();
+      };
+
+      getCurrentContext = function (){
+        resetCrispContext();
+        return originalGetContext();
+      };
+      isCrispContextUsed = true;
       setPixelsCached = 0;
     }
 
     function set$3(x, y, c) {
       if (x < p.width && x >= 0 && y >= 0 && y < p.height) {
-        replaceContext();
+        useCrispContext();
         p.pixels.setPixel((0|x)+p.width*(0|y), c);
         if(++setPixelsCached > maxPixelsCached) {
-          resetContext();
+          resetCrispContext();
         }
       }
     }
@@ -13701,6 +13735,7 @@
     * @see updatePixels
     */
     p.loadPixels = function() {
+      var curContext = getCurrentContext();
       p.imageData = curContext.getImageData(0, 0, p.width, p.height);
     };
 
@@ -13720,6 +13755,7 @@
     */
     p.updatePixels = function() {
       if (p.imageData) {
+        var curContext = getCurrentContext();
         curContext.putImageData(p.imageData, 0, 0);
       }
     };
@@ -13762,6 +13798,7 @@
     * @see size
     */
     p.hint = function hint(which) {
+      var curContext = getCurrentContext();
       if (which === PConstants.DISABLE_DEPTH_TEST) {
          curContext.disable(curContext.DEPTH_TEST);
          curContext.depthMask(false);
@@ -13823,6 +13860,7 @@
         throw "Incorrect background parameters.";
       }
 
+      var curContext = getCurrentContext();
       if (p.use3DContext) {
         if (color !== undef) {
           var c = p.color.toGLArray(color);
@@ -13898,6 +13936,7 @@
           p.vertex(x+wid, y, 0, wid, 0);
           p.endShape();
         } else {
+          var curContext = getCurrentContext();
           var bounds = imageModeConvert(x || 0, y || 0, w || img.width, h || img.height, arguments.length < 4);
           //var fastImage = ("sourceImg" in img) && curTint === null && !img.__mask;
           var fastImage = !!img.sourceImg && curTint === null && !img.__mask;
@@ -13939,6 +13978,7 @@
 
     // Clears a rectangle in the Canvas element or the whole Canvas
     p.clear = function clear(x, y, width, height) {
+      var curContext = getCurrentContext();
       if (arguments.length === 0) {
         curContext.clearRect(0, 0, p.width, p.height);
       } else {
@@ -14981,6 +15021,7 @@
       this.origName = name;
     }
     PFont.prototype.width = function(str) {
+      var curContext = getCurrentContext();
       if ("measureText" in curContext) {
         return curContext.measureText(typeof str === "number" ? String.fromCharCode(str) : str).width / curTextSize;
       } else if ("mozMeasureText" in curContext) {
@@ -15086,6 +15127,7 @@
       if (size) {
         p.textSize(size);
       } else {
+        var curContext = getCurrentContext();
         curContext.font = curContext.mozTextStyle = curTextSize + "px " + curTextFont.name;
       }
     };
@@ -15102,6 +15144,7 @@
      */
     p.textSize = function textSize(size) {
       if (size) {
+        var curContext = getCurrentContext();
         curTextSize = size;
         curContext.font = curContext.mozTextStyle = curTextSize + "px " + curTextFont.name;
       }
@@ -15139,6 +15182,7 @@
      * @see #textFont
      */
     p.textWidth = function textWidth(str) {
+      var curContext = getCurrentContext();
       if (p.use3DContext) {
         if (textcanvas === undef) {
           textcanvas = document.createElement("canvas");
@@ -15412,6 +15456,7 @@
 
     // Print some text to the Canvas
     function text$line(str, x, y, z, align) {
+      var curContext = getCurrentContext();
       var textWidth = 0, xOffset = 0;
       // If the font is a standard Canvas font...
       if (!curTextFont.glyph) {
@@ -15484,8 +15529,9 @@
       if (textcanvas === undef) {
         textcanvas = document.createElement("canvas");
       }
-      var oldContext = curContext;
-      curContext = textcanvas.getContext("2d");
+      var curContext = textcanvas.getContext("2d");
+      var oldContext = swapContext(curContext);
+
       curContext.font = curContext.mozTextStyle = curTextSize + "px " + curTextFont.name;
       var textWidth = 0;
       if ("fillText" in curContext) {
@@ -15504,6 +15550,8 @@
 
       // use it as a texture
       var aspect = textcanvas.width/textcanvas.height;
+
+      swapContext(oldContext);
       curContext = oldContext;
 
       curContext.bindTexture(curContext.TEXTURE_2D, textTex);
@@ -15595,6 +15643,7 @@
       var lineWidth = 0;
       var textboxWidth = width;
       var yOffset = 0;
+      var curContext = getCurrentContext();
       curContext.font = curTextSize + "px " + curTextFont.name;
       var drawCommands = [];
 
@@ -15698,7 +15747,8 @@
      * @see #textFont
      */
     p.text = function text() {
-      if (tMode === PConstants.SCREEN) {  // TODO: 3D Screen not working yet due to 3D not working in textAscent
+      if (p.use3DContext && tMode === PConstants.SCREEN) {  
+        // TODO: 3D Screen not working yet due to 3D not working in textAscent
         p.pushMatrix();
         p.resetMatrix();
         var asc = p.textAscent();
@@ -15782,7 +15832,7 @@
         var c = regex("[A-Za-z][0-9\\- ]+|Z", d);
 
         // Begin storing path object
-        path = "var path={draw:function(){saveContext();curContext.beginPath();";
+        path = "(function(){var curContext=getCurrentContext();saveContext();curContext.beginPath();";
 
         x = 0;
         y = 0;
@@ -15868,7 +15918,7 @@
         path += "executeContextFill();executeContextStroke();";
         path += "restoreContext();";
         path += "curContext.translate(" + horiz_adv_x + ",0);";
-        path += "}}";
+        path += "})";
 
         return path;
       };
@@ -15900,13 +15950,12 @@
           // Split path commands in glpyh
           if (d !== undef) {
             path = buildPath(d);
-            eval(path);
             // Store glyph data to table object
             p.glyphTable[url][name] = {
               name: name,
               unicode: unicode,
               horiz_adv_x: horiz_adv_x,
-              draw: path.draw
+              draw: eval(path)
             };
           }
         } // finished adding glyphs to table
@@ -16587,6 +16636,27 @@
     // Place-holder for debugging function
     Processing.debug = function(e) {};
 
+    getCurrentContext = function () {
+      var curContext = curElement.getContext("2d");
+      swapContext(curContext);
+
+      modelView = new PMatrix2D();
+
+      // Canvas has trouble rendering single pixel stuff on whole-pixel
+      // counts, so we slightly offset it (this is super lame).
+      curContext.translate(0.5, 0.5);
+
+      curContext.lineCap = 'round';
+
+      // Set default stroke and fill color
+      p.stroke(0);
+      p.fill(255);
+      p.noSmooth();
+      p.background(204, 204, 204);
+
+      return curContext;
+    };
+
     // Send aCode Processing syntax to be converted to JavaScript
     if (aCode) {
       if (aCode instanceof Processing.Sketch) {
@@ -16606,8 +16676,6 @@
 
       // Expose internal field for diagnostics and testing
       p.externals.sketch = curSketch;
-
-      p.use3DContext = curSketch.use3DContext;
 
       if ("mozOpaque" in curElement) {
         curElement.mozOpaque = !curSketch.options.isTransparent;
@@ -16667,27 +16735,7 @@
         keyFunc(e, "keyup");
       });
 
-      if (!curSketch.use3DContext) {
-        // Setup default 2d canvas context.
-        curContext = curElement.getContext('2d');
-
-        // Externalize the default context
-        p.externals.context = curContext;
-
-        modelView = new PMatrix2D();
-
-        // Canvas has trouble rendering single pixel stuff on whole-pixel
-        // counts, so we slightly offset it (this is super lame).
-        curContext.translate(0.5, 0.5);
-
-        curContext.lineCap = 'round';
-
-        // Set default stroke and fill color
-        p.stroke(0);
-        p.fill(255);
-        p.noSmooth();
-        p.disableContextMenu();
-      }
+      p.disableContextMenu();
 
       // Step through the libraries that were attached at doc load...
       for (var i in Processing.lib) {
@@ -16702,34 +16750,24 @@
         }
       }
 
-      // Sets all of the Processing defaults. Called before setup() in executeSketch()
-      var setDefaults = function(processing) {
-        // Default size in P5 is 100x100 with a light gray background, but only set this for 2D
-        if (!processing.use3DContext) {
-          processing.size(100, 100);
-          processing.background(204, 204, 204);
-        }
-      };
-
       var executeSketch = function(processing) {
         // Don't start until all specified images and fonts in the cache are preloaded
         if (!curSketch.imageCache.pending && curSketch.fonts.pending()) {
-          // Run void setDefaults() before attach() to work with embedded scripts
-          setDefaults(processing);
-
           curSketch.attach(processing, defaultScope);
 
           // Run void setup()
           if (processing.setup) {
             processing.setup();
-            // if any transforms were performed in setup reset to identify matrix so draw loop is unpolluted
-            if (!curSketch.use3DContext) {
-              curContext.setTransform(1, 0, 0, 1, 0, 0);
-            }
+          }
+
+          // if any transforms were performed in setup reset to identify matrix so draw loop is unpolluted
+          if (!processing.use3DContext) {
+            var curContext = getCurrentContext();
+            curContext.setTransform(1, 0, 0, 1, 0, 0);
           }
 
           // some pixels can be cached, flushing
-          resetContext();
+          resetCrispContext();
 
           if (processing.draw) {
             if (!doLoop) {
@@ -16737,6 +16775,10 @@
             } else {
               processing.loop();
             }
+          } else {
+            // no draw() was specified - edge case
+            // ensuring context was created
+            getCurrentContext();
           }
         } else {
           window.setTimeout(function() { executeSketch(processing); }, 10);
@@ -18183,12 +18225,6 @@
       }
     }
 
-    // Check if 3D context is invoked -- this is not the best way to do this.
-    // Following regex replaces strings, comments and regexs with an empty string
-    var codeWoStrings = aCode.replace(/("(?:[^"\\\n]|\\.)*")|('(?:[^'\\\n]|\\.)*')|(([\[\(=|&!\^:?]\s*)(\/(?![*\/])(?:[^\/\\\n]|\\.)*\/[gim]*)\b)|(\/\/[^\n]*\n)|(\/\*(?:(?!\*\/)(?:.|\n))*\*\/)/g, "");
-    if (codeWoStrings.match(/\bsize\((?:.+),(?:.+),\s*(OPENGL|P3D)\s*\);/)) {
-      sketch.use3DContext = true;
-    }
     return aCode;
   }
 
@@ -18502,7 +18538,6 @@
 
   Processing.Sketch = function(attachFunction) {
     this.attachFunction = attachFunction; // can be optional
-    this.use3DContext = false;
     this.options = {
       isTransparent: false,
       crispLines: false,
@@ -18624,7 +18659,6 @@
       var i;
       var code = "((function(Sketch) {\n";
       code += "var sketch = new Sketch(\n" + this.sourceCode + ");\n";
-      code += "sketch.use3DContext = " + this.use3DContext + ";\n";
       for(i in this.options) {
         if(this.options.hasOwnProperty(i)) {
           var value = this.options[i];
