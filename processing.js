@@ -7357,29 +7357,9 @@
 
       p.frameCount++;
 
-      inDraw = true;
-
-      if (p.use3DContext) {
-        // even if the color buffer isn't cleared with background(),
-        // the depth buffer needs to be cleared regardless.
-        curContext.clear(curContext.DEPTH_BUFFER_BIT);
-        curContextCache = { attributes: {}, locations: {} };
-        // Delete all the lighting states and the materials the
-        // user set in the last draw() call.
-        p.noLights();
-        p.lightFalloff(1, 0, 0);
-        p.shininess(1);
-        p.ambient(255, 255, 255);
-        p.specular(0, 0, 0);
-        p.camera();
-        p.draw();
-      } else {
-        saveContext();
-        p.draw();
-        restoreContext();
-      }
-
-      inDraw = false;
+      p.beginDraw();
+      p.draw();
+      p.endDraw();
     };
 
     /**
@@ -7571,11 +7551,53 @@
       }
     };
 
-    // PGraphics methods
-    // TODO: These functions are suppose to be called before any operations are called on the
-    //       PGraphics object. They currently do nothing.
-    p.beginDraw = function beginDraw() {};
-    p.endDraw = function endDraw() {};
+    /**
+    * Sets the default properties for a PGraphics object. It should be called before anything 
+    * is drawn into the object.
+    *
+    * @returns none
+    */
+    p.beginDraw = function beginDraw() {
+      if (inDraw) {
+        return;
+      }
+
+      inDraw = true;
+
+      if (p.use3DContext) {
+        // even if the color buffer isn't cleared with background(),
+        // the depth buffer needs to be cleared regardless.
+        curContext.clear(curContext.DEPTH_BUFFER_BIT);
+        curContextCache = { attributes: {}, locations: {} };
+        // Delete all the lighting states and the materials the
+        // user set in the last draw() call.
+        p.noLights();
+        p.lightFalloff(1, 0, 0);
+        p.shininess(1);
+        p.ambient(255, 255, 255);
+        p.specular(0, 0, 0);
+        p.camera();
+      } else {
+        saveContext();
+      }
+    };
+
+    /**
+    * Finalizes the rendering of a PGraphics object so that it can be shown on screen.
+    *
+    * @returns none
+    */
+    p.endDraw = function endDraw() {
+      if (!inDraw) {
+        return;
+      }
+
+      if (!p.use3DContext) {
+        restoreContext();
+      }
+
+      inDraw = false;
+    };
 
     // Imports an external Processing.js library
     p.Import = function Import(lib) {
