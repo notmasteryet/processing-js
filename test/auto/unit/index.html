@@ -1,0 +1,167 @@
+<html>
+<head>
+<script type="text/javascript" src="../../../processing.js"></script>
+<script type="text/javascript" src="../../../tools/test-harness-lib.js"></script>
+<script type="text/javascript" src="tests.js"></script>
+<script type="text/javascript">
+function __tests_init() {
+  var testCount = __tests.length;
+  document.getElementById("totalTests").innerHTML = testCount;
+  var tableBody = document.getElementById("testResults");
+  for (var i = 0; i < testCount; ++i) {
+    var row = document.createElement("tr");
+    var nameCell = document.createElement("td");
+    nameCell.innerHTML = __tests[i].name;
+    var resultCell = document.createElement("td");
+    row.appendChild(nameCell);
+    row.appendChild(resultCell);
+    tableBody.appendChild(row);  
+  }
+}
+
+var __tests_result;
+function print(result) {
+  __tests_result += result;
+}
+
+var __tests_totals;
+
+function __runOne(testNumber) {
+  var canvas = document.createElement("canvas");
+  var display = document.getElementById("runDisplay");
+  while (display.childNodes.length > 0) {
+    display.removeChild(display.firstChild);
+  }
+  display.appendChild(canvas);
+  var testResult = document.getElementById("testResults").
+    childNodes.item(testNumber).childNodes.item(1);
+  
+  function ajaxAsync(url, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        var error;
+        if (xhr.status !== 200 && xhr.status !== 0) {
+          error = "Invalid XHR status " + xhr.status;
+        } else if (xhr.responseText === "") {
+          error = "No content";
+        }
+        callback(xhr.responseText, error);
+      }
+    };
+    xhr.open("GET", url, true);
+    if (xhr.overrideMimeType) {
+      xhr.overrideMimeType("application/json");
+    }
+    xhr.setRequestHeader("If-Modified-Since", "Fri, 01 Jan 1960 00:00:00 GMT"); // no cache
+    xhr.send(null);
+  }
+
+  function runNext() {
+    if(testNumber + 1 < __tests.length) {
+      setTimeout(function() {
+        __runOne(testNumber + 1);
+      }, 10);
+    } else {
+      __tests_stop();
+    }
+  }
+  
+  var test = __tests[testNumber];
+  
+  function fileLoaded(text) {
+    try {
+      __tests_result = "";
+      var p = new Processing(canvas, "UnitTests();function link() {}" + text);
+      p.exit();
+      p._printTestSummary();
+    } catch(ex) {
+      try {
+        p.exit();
+      } catch(exNull) {}
+      __tests_result += ex;
+    }
+    
+    var m = /TEST-SUMMARY: (\d+)\/(\d+)/.exec(__tests_result);
+    testResult.innerHTML = m ? m[1] + "/" + m[2] : "n/a";
+    if (m) {
+      testResult.setAttribute("class", m[2] === "0" ? "success" : "fail");
+      __tests_totals.success += parseInt(m[1]);
+      __tests_totals.fail += parseInt(m[2]);
+    } else {
+      testResult.setAttribute("class", "unknown");
+    }
+    testResult.setAttribute("title", __tests_result);
+    runNext();
+  }
+  
+  ajaxAsync(test.path, function(text, error) {
+    if (error) {
+      testResult.innerHTML = "n/a";
+      testResult.setAttribute("class", "unknown");
+      runNext();
+      return;
+    }
+    
+    fileLoaded(text);
+  });
+}
+
+function __tests_start() {
+  __tests_totals = {success: 0, fail: 0};
+  __runOne(0);
+}
+
+function __tests_stop() {
+  document.getElementById("totalSuccess").innerHTML = __tests_totals.success;
+  document.getElementById("totalFail").innerHTML = __tests_totals.fail;
+}
+</script>
+<style>
+body {
+  font: sans-serif;
+}
+
+#runDisplay {
+  width: 200; height:200; overflow: scroll;
+  border: solid black 1px;
+  margin: 20px 0px;
+}
+
+#testTable {
+  width: 500px;
+  border: solid black 1px;
+}
+
+.success { background: green; }
+.fail { background: red; }
+.unknown { background: yellow; }
+</style>
+</head>
+<body>
+
+<div id="totals">
+  <table>
+    <tr><td>Total test: </td><td><span id="totalTests"></span></td></tr>
+    <tr><td>Checks succeeded: </td><td><span id="totalSuccess"></span></td></tr>
+    <tr><td>Checks failed: </td><td><span id="totalFail"></span></td></tr>
+  </table>
+</div>
+<div>
+  <button onclick="__tests_start()">Start</button>
+</div>
+
+<div id="runDisplay">
+
+</div>
+
+<table id="testTable">
+  <thead><tr><th>Test</th><th>Checks</th></tr></thead>
+  <tbody id="testResults"></tbody>
+</table>
+
+<script>
+  __tests_init();
+</script>
+</body>
+</html>
