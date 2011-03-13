@@ -1279,7 +1279,6 @@
     // "Private" variables used to maintain state
     var curContext,
         curSketch,
-        drawing, // hold a Drawing2D or Drawing3D object
         online = true,
         doFill = true,
         fillStyle = [1.0, 1.0, 1.0, 1.0],
@@ -1346,6 +1345,8 @@
         programObject3D,
         programObject2D,
         programObjectUnlitShape,
+        text$line,
+        newPMatrix,
         boxBuffer,
         boxNormBuffer,
         boxOutlineBuffer,
@@ -2169,20 +2170,10 @@
     ////////////////////////////////////////////////////////////////////////////
     // 2D/3D drawing handling
     ////////////////////////////////////////////////////////////////////////////
-    // Objects for shared, 2D and 3D contexts
-    var DrawingShared = function() {};
-    var Drawing2D = function() {};
-    var Drawing3D = function() {};
-    
-    // Setup the prototype chain
-    Drawing2D.prototype = new DrawingShared();
-    Drawing2D.prototype.constructor = Drawing2D;
-    Drawing3D.prototype = new DrawingShared();
-    Drawing3D.prototype.constructor = Drawing3D;
     
     // A no-op function for when the user calls 3D functions from a 2D sketch
     // We can change this to a throw or console.error() later if we want
-    DrawingShared.prototype.a3DOnlyFunction = function(){};
+    function drawingShared$a3DOnlyFunction() { }
 
     ////////////////////////////////////////////////////////////////////////////
     // Char handling
@@ -5712,7 +5703,7 @@
      * @param {Object | Array} matrix the matrix to be pushed into the stack
      */
     PMatrixStack.prototype.load = function load() {
-      var tmpMatrix = drawing.newPMatrix();
+      var tmpMatrix = newPMatrix();
 
       if (arguments.length === 1) {
         tmpMatrix.set(arguments[0]);
@@ -5722,13 +5713,13 @@
       this.matrixStack.push(tmpMatrix);
     };
     
-    Drawing2D.prototype.newPMatrix = function() {
+    function drawing2d$newPMatrix() {
       return new PMatrix2D();
-    };
+    }
     
-    Drawing3D.prototype.newPMatrix = function() {
+    function drawing3d$newPMatrix() {
       return new PMatrix3D();
-    };
+    }
 
     /**
      * @member PMatrixStack
@@ -5755,7 +5746,7 @@
      * @returns {Object} the matrix at the top of the stack
      */
     PMatrixStack.prototype.peek = function peek() {
-      var tmpMatrix = drawing.newPMatrix();
+      var tmpMatrix = newPMatrix();
 
       tmpMatrix.set(this.matrixStack[this.matrixStack.length - 1]);
       return tmpMatrix;
@@ -6911,14 +6902,14 @@
     * @see rotateY
     * @see rotateZ
     */
-    Drawing2D.prototype.translate = function(x, y, z) {
+    function drawing2d$translate(x, y) {
       curContext.translate(x, y);
-    };
+    }
     
-    Drawing3D.prototype.translate = function(x, y, z) {
+    function drawing3d$translate(x, y, z) {
       forwardTransform.translate(x, y, z);
       reverseTransform.invTranslate(x, y, z);
-    };
+    }
 
     /**
     * Increases or decreases the size of a shape by expanding and contracting vertices. Objects always scale from their
@@ -6944,14 +6935,14 @@
     * @see rotateY
     * @see rotateZ
     */
-    Drawing2D.prototype.scale = function(x, y, z) {
+    function drawing2d$scale(x, y) {
       curContext.scale(x, y || x);
-    };
+    }
     
-    Drawing3D.prototype.scale = function(x, y, z) {
+    function drawing3d$scale(x, y, z) {
       forwardTransform.scale(x, y, z);
       reverseTransform.invScale(x, y, z);
-    };
+    }
 
     /**
     * Pushes the current transformation matrix onto the matrix stack. Understanding pushMatrix() and popMatrix()
@@ -6969,13 +6960,13 @@
     * @see rotateY
     * @see rotateZ
     */
-    Drawing2D.prototype.pushMatrix = function() {
+    function drawing2d$pushMatrix() {
       saveContext();
-    };
+    }
     
-    Drawing3D.prototype.pushMatrix = function() {
+    function drawing3d$pushMatrix() {
       userMatrixStack.load(modelView);
-    };
+    }
 
     /**
     * Pops the current transformation matrix off the matrix stack. Understanding pushing and popping requires
@@ -6988,13 +6979,13 @@
     * @see popMatrix
     * @see pushMatrix
     */
-    Drawing2D.prototype.popMatrix = function() {
+    function drawing2d$popMatrix() {
       restoreContext();
-    };
+    }
     
-    Drawing3D.prototype.popMatrix = function() {
+    function drawing3d$popMatrix() {
       modelView.set(userMatrixStack.pop());
-    };
+    }
 
     /**
     * Replaces the current matrix with the identity matrix. The equivalent function in OpenGL is glLoadIdentity().
@@ -7006,14 +6997,14 @@
     * @see applyMatrix
     * @see printMatrix
     */
-    Drawing2D.prototype.resetMatrix = function() {
+    function drawing2d$resetMatrix() {
       curContext.setTransform(1,0,0,1,0,0);
-    };
+    }
     
-    Drawing3D.prototype.resetMatrix = function() {
+    function drawing3d$resetMatrix() {
       forwardTransform.reset();
       reverseTransform.reset();
-    };
+    }
 
     /**
     * Multiplies the current matrix by the one specified through the parameters. This is very slow because it will
@@ -7029,20 +7020,20 @@
     * @see resetMatrix
     * @see printMatrix
     */
-    DrawingShared.prototype.applyMatrix = function() {
+    function drawingShared$applyMatrix() {
       var a = arguments;
       forwardTransform.apply(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14], a[15]);
       reverseTransform.invApply(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14], a[15]);
-    };
+    }
     
-    Drawing2D.prototype.applyMatrix = function() {
+    function drawing2d$applyMatrix() {
       var a = arguments;
       for (var cnt = a.length; cnt < 16; cnt++) {
         a[cnt] = 0;
       }
       a[10] = a[15] = 1;
-      DrawingShared.prototype.applyMatrix.apply(this, a);
-    };
+      drawingShared$applyMatrix.apply(this, a);
+    }
 
     /**
     * Rotates a shape around the x-axis the amount specified by the angle parameter. Angles should be
@@ -7148,14 +7139,14 @@
     * @see popMatrix
     * @see pushMatrix
     */
-    Drawing2D.prototype.rotate = function(angleInRadians) {
+    function drawing2d$rotate(angleInRadians) {
       curContext.rotate(angleInRadians);
-    };
+    }
     
-    Drawing3D.prototype.rotate = function(angleInRadians) {
+    function drawing3d$rotate(angleInRadians) {
       forwardTransform.rotateZ(angleInRadians);
       reverseTransform.invRotateZ(angleInRadians);
-    };
+    }
 
     /**
     * The pushStyle() function saves the current style settings and popStyle()  restores the prior settings.
@@ -7363,7 +7354,7 @@
     * @see noLoop
     * @see loop
     */
-    DrawingShared.prototype.redraw = function() {
+    function drawingShared$redraw() {
       var sec = (new Date().getTime() - timeSinceLastFPS) / 1000;
       framesSinceLastFPS++;
       var fps = framesSinceLastFPS / sec;
@@ -7376,10 +7367,10 @@
       }
 
       p.frameCount++;
-    };
+    }
     
-    Drawing2D.prototype.redraw = function() {
-      DrawingShared.prototype.redraw.apply(this, arguments);
+    function drawing2d$redraw() {
+      drawingShared$redraw.apply(this, arguments);
       
       inDraw = true;
       
@@ -7388,10 +7379,10 @@
       restoreContext();
       
       inDraw = false;
-    };
+    }
     
-    Drawing3D.prototype.redraw = function() {
-      DrawingShared.prototype.redraw.apply(this, arguments);
+    function drawing3d$redraw() {
+      drawingShared$redraw.apply(this, arguments);
       
       inDraw = true;
       
@@ -7410,7 +7401,7 @@
       p.draw();
       
       inDraw = false;
-    };
+    }
 
     /**
     * Stops Processing from continuously executing the code within draw(). If loop() is
@@ -9118,7 +9109,7 @@
     * @see createGraphics
     * @see screen
     */
-    DrawingShared.prototype.size = function(aWidth, aHeight, aMode) {
+    function drawingShared$size(aWidth, aHeight, aMode) {
       p.stroke(0);
       p.fill(255);
       
@@ -9159,9 +9150,9 @@
 
       // Externalize the context
       p.externals.context = curContext;
-    };
+    }
     
-    Drawing2D.prototype.size = function(aWidth, aHeight, aMode) {
+    function drawing2d$size(aWidth, aHeight, aMode) {
       if (curContext === undef) {
         // size() was called without p.init() default context, ie. p.createGraphics()
         curContext = curElement.getContext("2d");
@@ -9169,10 +9160,10 @@
         modelView = new PMatrix2D();
       }
       
-      DrawingShared.prototype.size.apply(this, arguments);
-    };
+      drawingShared$size.apply(this, arguments);
+    }
     
-    Drawing3D.prototype.size = (function() {
+    var drawing3d$size = (function() {
       var size3DCalled = false;
       
       return function size(aWidth, aHeight, aMode) {
@@ -9309,7 +9300,7 @@
         bezierBasisMatrix = new PMatrix3D();
         bezierBasisMatrix.set(-1, 3, -3, 1, 3, -6, 3, 0, -3, 3, 0, 0, 1, 0, 0, 0);
         
-        DrawingShared.prototype.size.apply(this, arguments);
+        drawingShared$size.apply(this, arguments);
       };
     }());
 
@@ -9342,9 +9333,7 @@
      * @see pointLight
      * @see spotLight
     */
-    Drawing2D.prototype.ambientLight = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.ambientLight = function(r, g, b, x, y, z) {
+    function drawing3d$ambientLight(r, g, b, x, y, z) {
       if (lightCount === PConstants.MAX_LIGHTS) {
         throw "can only create " + PConstants.MAX_LIGHTS + " lights";
       }
@@ -9360,7 +9349,7 @@
       uniformf("lights.position.3d." + lightCount, programObject3D, "lights" + lightCount + ".position", pos.array());
       uniformi("lights.type.3d." + lightCount, programObject3D, "lights" + lightCount + ".type", 0);
       uniformi("lightCount3d", programObject3D, "lightCount", ++lightCount);
-    };
+    }
 
     /**
      * Adds a directional light. Directional light comes from one direction and
@@ -9390,9 +9379,7 @@
      * @see pointLight
      * @see spotLight
     */
-    Drawing2D.prototype.directionalLight = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.directionalLight = function(r, g, b, nx, ny, nz) {
+    function drawing3d$directionalLight(r, g, b, nx, ny, nz) {
       if (lightCount === PConstants.MAX_LIGHTS) {
         throw "can only create " + PConstants.MAX_LIGHTS + " lights";
       }
@@ -9411,7 +9398,7 @@
       uniformf("lights.position.3d." + lightCount, programObject3D, "lights" + lightCount + ".position", [dir[0], -dir[1], dir[2]]);
       uniformi("lights.type.3d." + lightCount, programObject3D, "lights" + lightCount + ".type", 1);
       uniformi("lightCount3d", programObject3D, "lightCount", ++lightCount);
-    };
+    }
 
     /**
      * Sets the falloff rates for point lights, spot lights, and ambient lights.
@@ -9440,12 +9427,10 @@
      * @see spotLight
      * @see lightSpecular
     */
-    Drawing2D.prototype.lightFalloff = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.lightFalloff = function(constant, linear, quadratic) {
+    function drawing3d$lightFalloff(constant, linear, quadratic) {
       curContext.useProgram(programObject3D);
       uniformf("falloff3d", programObject3D, "falloff", [constant, linear, quadratic]);
-    };
+    }
 
     /**
      * Sets the specular color for lights. Like <b>fill()</b>, it affects only the
@@ -9466,12 +9451,10 @@
      * @see pointLight
      * @see spotLight
     */
-    Drawing2D.prototype.lightSpecular = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.lightSpecular = function(r, g, b) {
+    function drawing3d$lightSpecular(r, g, b) {
       curContext.useProgram(programObject3D);
       uniformf("specular3d", programObject3D, "specular", [r / 255, g / 255, b / 255]);
-    };
+    }
 
     /**
      * Sets the default ambient light, directional light, falloff, and specular
@@ -9520,9 +9503,7 @@
      * @see ambientLight
      * @see spotLight
     */
-    Drawing2D.prototype.pointLight = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.pointLight = function(r, g, b, x, y, z) {
+    function drawing3d$pointLight(r, g, b, x, y, z) {
       if (lightCount === PConstants.MAX_LIGHTS) {
         throw "can only create " + PConstants.MAX_LIGHTS + " lights";
       }
@@ -9540,7 +9521,7 @@
       uniformf("lights.position.3d." + lightCount, programObject3D, "lights" + lightCount + ".position", pos.array());
       uniformi("lights.type.3d." + lightCount, programObject3D, "lights" + lightCount + ".type", 2);
       uniformi("lightCount3d", programObject3D, "lightCount", ++lightCount);
-    };
+    }
 
     /**
      * Disable all lighting. Lighting is turned off by default and enabled with
@@ -9552,13 +9533,11 @@
      *
      * @see lights
     */
-    Drawing2D.prototype.noLights = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.noLights = function() {
+    function drawing3d$noLights() {
       lightCount = 0;
       curContext.useProgram(programObject3D);
       uniformi("lightCount3d", programObject3D, "lightCount", lightCount);
-    };
+    }
 
     /**
      * Adds a spot light. Lights need to be included in the <b>draw()</b> to
@@ -9589,9 +9568,7 @@
      * @see ambientLight
      * @see pointLight
     */
-    Drawing2D.prototype.spotLight = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.spotLight = function(r, g, b, x, y, z, nx, ny, nz, angle, concentration) {
+    function drawing3d$spotLight(r, g, b, x, y, z, nx, ny, nz, angle, concentration) {
       if (lightCount === PConstants.MAX_LIGHTS) {
         throw "can only create " + PConstants.MAX_LIGHTS + " lights";
       }
@@ -9620,7 +9597,7 @@
       uniformf("lights.angle.3d." + lightCount, programObject3D, "lights" + lightCount + ".angle", angle);
       uniformi("lights.type.3d." + lightCount, programObject3D, "lights" + lightCount + ".type", 3);
       uniformi("lightCount3d", programObject3D, "lightCount", ++lightCount);
-    };
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Camera functions
@@ -9856,9 +9833,7 @@
      * @param {int|float} h  dimension of the box in the y-dimension
      * @param {int|float} d  dimension of the box in the z-dimension
      */
-    Drawing2D.prototype.box = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.box = function(w, h, d) {
+    function drawing3d$box(w, h, d) {
       // user can uniformly scale the box by
       // passing in only one argument.
       if (!h || !d) {
@@ -9938,7 +9913,7 @@
         curContext.lineWidth(lineWidth);
         curContext.drawArrays(curContext.LINES, 0, boxOutlineVerts.length / 3);
       }
-    };
+    }
 
     /**
      * The initSphere() function is a helper function used by <b>sphereDetail()</b>
@@ -10103,9 +10078,7 @@
      *
      * @param {int|float} r the radius of the sphere
      */
-    Drawing2D.prototype.sphere = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.sphere = function() {
+    function drawing3d$sphere() {
       var sRad = arguments[0], c;
 
       if ((sphereDetailU < 3) || (sphereDetailV < 2)) {
@@ -10184,7 +10157,7 @@
         curContext.lineWidth(lineWidth);
         curContext.drawArrays(curContext.LINE_STRIP, 0, sphereVerts.length / 3);
       }
-    };
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Coordinates
@@ -10306,9 +10279,7 @@
      * @see specular
      * @see shininess
     */
-    Drawing2D.prototype.ambient = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.ambient = function() {
+    function drawing3d$ambient() {
       // create an alias to shorten code
       var a = arguments;
 
@@ -10331,7 +10302,7 @@
       else {
         uniformf("mat_ambient3d", programObject3D, "mat_ambient", [a[0] / 255, a[1] / 255, a[2] / 255]);
       }
-    };
+    }
 
     /**
      * Sets the emissive color of the material used for drawing shapes
@@ -10357,9 +10328,7 @@
      * @see specular
      * @see shininess
     */
-    Drawing2D.prototype.emissive = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.emissive = function() {
+    function drawing3d$emissive() {
       // create an alias to shorten code
       var a = arguments;
 
@@ -10383,7 +10352,7 @@
       else {
         uniformf("mat_emissive3d", programObject3D, "mat_emissive", [a[0] / 255, a[1] / 255, a[2] / 255]);
       }
-    };
+    }
 
     /**
      * Sets the amount of gloss in the surface of shapes. Used in combination with
@@ -10394,13 +10363,11 @@
      *
      * @returns none
     */
-    Drawing2D.prototype.shininess = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.shininess = function(shine) {
+    function drawing3d$shininess(shine) {
       curContext.useProgram(programObject3D);
       uniformi("usingMat3d", programObject3D, "usingMat", true);
       uniformf("shininess3d", programObject3D, "shininess", shine);
-    };
+    }
 
     /**
      * Sets the specular color of the materials used for shapes drawn to the screen,
@@ -10438,15 +10405,13 @@
      * @see emissive
      * @see shininess
     */
-    Drawing2D.prototype.specular = DrawingShared.prototype.a3DOnlyFunction;
-    
-    Drawing3D.prototype.specular = function() {
+    function drawing3d$specular() {
       var c = p.color.apply(this, arguments);
 
       curContext.useProgram(programObject3D);
       uniformi("usingMat3d", programObject3D, "usingMat", true);
       uniformf("mat_specular3d", programObject3D, "mat_specular", p.color.toGLArray(c).slice(0, 3));
-    };
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Coordinates
@@ -10572,24 +10537,24 @@
      * @see #background()
      * @see #colorMode()
      */
-    DrawingShared.prototype.fill = function() {
+    function drawingShared$fill() {
       var color = p.color(arguments[0], arguments[1], arguments[2], arguments[3]);
       if(color === currentFillColor && doFill) {
         return;
       }
       doFill = true;
       currentFillColor = color;
-    };
+    }
     
-    Drawing2D.prototype.fill = function() {
-      DrawingShared.prototype.fill.apply(this, arguments);
+    function drawing2d$fill() {
+      drawingShared$fill.apply(this, arguments);
       isFillDirty = true;
-    };
+    }
     
-    Drawing3D.prototype.fill = function() {
-      DrawingShared.prototype.fill.apply(this, arguments);
+    function drawing3d$fill() {
+      drawingShared$fill.apply(this, arguments);
       fillStyle = p.color.toGLArray(currentFillColor);
-    };
+    }
 
     function executeContextFill() {
       if(doFill) {
@@ -10642,24 +10607,24 @@
      * @see #background()
      * @see #colorMode()
      */
-    DrawingShared.prototype.stroke = function() {
+    function drawingShared$stroke() {
       var color = p.color(arguments[0], arguments[1], arguments[2], arguments[3]);
       if(color === currentStrokeColor && doStroke) {
         return;
       }
       doStroke = true;
       currentStrokeColor = color;
-    };
+    }
     
-    Drawing2D.prototype.stroke = function() {
-      DrawingShared.prototype.stroke.apply(this, arguments);
+    function drawing2d$stroke() {
+      drawingShared$stroke.apply(this, arguments);
       isStrokeDirty = true;
-    };
+    }
     
-    Drawing3D.prototype.stroke = function() {
-      DrawingShared.prototype.stroke.apply(this, arguments);
+    function drawing3d$stroke() {
+      drawingShared$stroke.apply(this, arguments);
       strokeStyle = p.color.toGLArray(currentStrokeColor);
-    };
+    }
 
     function executeContextStroke() {
       if(doStroke) {
@@ -10687,20 +10652,20 @@
      *
      * @param {int|float} w the weight (in pixels) of the stroke
      */
-    DrawingShared.prototype.strokeWeight = function(w) {
+    function drawingShared$strokeWeight(w) {
       lineWidth = w;
-    };
+    }
     
-    Drawing2D.prototype.strokeWeight = function(w) {
-      DrawingShared.prototype.strokeWeight.apply(this, arguments);
+    function drawing2d$strokeWeight(w) {
+      drawingShared$strokeWeight.apply(this, arguments);
       curContext.lineWidth = w;
-    };
+    }
     
-    Drawing3D.prototype.strokeWeight = function(w) {
-      DrawingShared.prototype.strokeWeight.apply(this, arguments);
+    function drawing3d$strokeWeight(w) {
+      drawingShared$strokeWeight.apply(this, arguments);
       curContext.useProgram(programObject2D);
       uniformf("pointSize2d", programObject2D, "pointSize", w);
-    };
+    }
 
     /**
      * The strokeCap() function sets the style for rendering line endings. These ends are either squared, extended, or rounded and
@@ -10733,32 +10698,32 @@
      * @see #hint()
      * @see #size()
      */
-    DrawingShared.prototype.smooth = function() {
+    function drawingShared$smooth() {
       curElement.style.setProperty("image-rendering", "optimizeQuality", "important");
-    };
+    }
     
-    Drawing2D.prototype.smooth = function() {
-      DrawingShared.prototype.smooth.apply(this, arguments);
+    function drawing2d$smooth() {
+      drawingShared$smooth.apply(this, arguments);
       if ("mozImageSmoothingEnabled" in curContext) {
         curContext.mozImageSmoothingEnabled = true;
       }
-    };
+    }
 
     /**
      * The noSmooth() function draws all geometry with jagged (aliased) edges.
      *
      * @see #smooth()
      */
-    DrawingShared.prototype.noSmooth = function() {
+    function drawingShared$noSmooth() {
       curElement.style.setProperty("image-rendering", "optimizeSpeed", "important");
-    };
+    }
     
-    Drawing2D.prototype.noSmooth = function() {
-      DrawingShared.prototype.noSmooth.apply(this, arguments);
+    function drawing2d$noSmooth() {
+      drawingShared$noSmooth.apply(this, arguments);
       if ("mozImageSmoothingEnabled" in curContext) {
         curContext.mozImageSmoothingEnabled = false;
       }
-    };
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Vector drawing functions
@@ -10786,7 +10751,7 @@
      *
      * @see #beginShape()
      */
-    Drawing2D.prototype.point = function(x, y, z) {
+    function drawing2d$point(x, y, z) {
       if (doStroke) {
         // TODO if strokeWeight > 1, do circle
 
@@ -10809,9 +10774,9 @@
           }
         }
       }
-    };
+    }
     
-    Drawing3D.prototype.point = function(x, y, z) {
+    function drawing3d$point(x, y, z) {
       var model = new PMatrix3D();
 
       // move point to position
@@ -10842,7 +10807,7 @@
 
         curContext.drawArrays(curContext.POINTS, 0, 1);
       }
-    };
+    }
 
     /**
      * Using the <b>beginShape()</b> and <b>endShape()</b> functions allow creating more complex forms.
@@ -10889,7 +10854,7 @@
      * @see curveVertex
      * @see texture
      */
-    DrawingShared.prototype.vertex = function() {
+    function drawingShared$vertex() {
       var vert = [];
 
       if (firstVert) { firstVert = false; }
@@ -10911,20 +10876,20 @@
       vert["isVert"] = true;
       
       return vert; 
-    };
+    }
     
-    Drawing2D.prototype.vertex = function() {
-      var vert = DrawingShared.prototype.vertex.apply(this, arguments);
+    function drawing2d$vertex() {
+      var vert = drawingShared$vertex.apply(this, arguments);
       
       // fill and stroke color
       vert[5] = currentFillColor;
       vert[6] = currentStrokeColor;
       
       vertArray.push(vert);
-    };
+    }
     
-    Drawing3D.prototype.vertex = function() {
-      var vert = DrawingShared.prototype.vertex.apply(this, arguments);
+    function drawing3d$vertex() {
+      var vert = drawingShared$vertex.apply(this, arguments);
       
       // fill rgba
       vert[5] = fillStyle[0];
@@ -10942,7 +10907,7 @@
       vert[15] = normalZ;
       
       vertArray.push(vert);
-    };
+    }
 
     /**
      * @private
@@ -11114,7 +11079,7 @@
      *
      * @see beginShape
      */
-    Drawing2D.prototype.endShape = function(mode) {
+    function drawing2d$endShape (mode) {
       // Duplicated in Drawing3D; too many variables used
       var closeShape = mode === PConstants.CLOSE;
       var lineVertArray = [];
@@ -11402,10 +11367,10 @@
       isBezier = false;
       curveVertArray = [];
       curveVertCount = 0;
-    };
+    }
     
-    Drawing3D.prototype.endShape = function(mode) {
-      // Duplicated in Drawing3D; too many variables used
+    function drawing3d$endShape(mode) {
+      // Duplicated in Drawing2D; too many variables used
       var closeShape = mode === PConstants.CLOSE;
       var lineVertArray = [];
       var fillVertArray = [];
@@ -11772,7 +11737,7 @@
       isBezier = false;
       curveVertArray = [];
       curveVertCount = 0;
-    };
+    }
 
     /**
      * The function splineForward() setup forward-differencing matrix to be used for speedy
@@ -11853,7 +11818,7 @@
      * @see vertex
      * @see bezier
      */
-    Drawing2D.prototype.bezierVertex = function() {
+    function drawing2d$bezierVertex() {
       isBezier = true;
       var vert = [];
       if (firstVert) {
@@ -11865,9 +11830,9 @@
       }
       vertArray.push(vert);
       vertArray[vertArray.length -1]["isVert"] = false;
-    };
+    }
     
-    Drawing3D.prototype.bezierVertex = function() {
+    function drawing3d$bezierVertex() {
       isBezier = true;
       var vert = [];
       if (firstVert) {
@@ -11905,7 +11870,7 @@
         }
         p.vertex(arguments[6], arguments[7], arguments[8]);
       }
-    };
+    }
 
     // texImage2D function changed http://www.khronos.org/webgl/public-mailing-list/archives/1007/msg00034.html
     // This method tries the new argument pattern first and falls back to the old version
@@ -12082,13 +12047,13 @@
      * @see vertex
      * @see bezierVertex
      */
-    Drawing2D.prototype.curveVertex = function(x, y, z) {
+    function drawing2d$curveVertex(x, y, z) {
       isCurve = true;
       
       p.vertex(x, y, z);
-    };
+    }
     
-    Drawing3D.prototype.curveVertex = function(x, y, z) {
+    function drawing3d$curveVertex(x, y, z) {
       isCurve = true;
       
       if (!curveInited) {
@@ -12115,7 +12080,7 @@
                             curveVertArray[curveVertCount-1][1],
                             curveVertArray[curveVertCount-1][2] );
       }
-    };
+    }
 
     /**
      * The curve() function draws a curved line on the screen. The first and second parameters
@@ -12146,7 +12111,7 @@
      * @see #curveTightness()
      * @see #bezier()
      */
-    Drawing2D.prototype.curve = function() {
+    function drawing2d$curve() {
       if (arguments.length === 8) // curve(x1, y1, x2, y2, x3, y3, x4, y4)
       {
         p.beginShape();
@@ -12156,9 +12121,9 @@
         p.curveVertex(arguments[6], arguments[7]);
         p.endShape();
       }
-    };
+    }
     
-    Drawing3D.prototype.curve = function() {
+    function drawing3d$curve() {
       if (arguments.length === 12) // curve(x1, y1, x2, y2, x3, y3, x4, y4)
       {
         p.beginShape();
@@ -12168,7 +12133,7 @@
         p.curveVertex(arguments[9], arguments[10], arguments[11]);
         p.endShape();
       }
-    };
+    }
 
     /**
      * The curveTightness() function modifies the quality of forms created with <b>curve()</b> and
@@ -12376,7 +12341,7 @@
     * @see strokeCap
     * @see beginShape
     */
-    Drawing2D.prototype.line = function() {
+    function drawing2d$line() {
       var x1, y1, z1, x2, y2, z2;
       
       x1 = arguments[0];
@@ -12408,9 +12373,9 @@
         executeContextStroke();
         curContext.closePath();
       }
-    };
+    }
     
-    Drawing3D.prototype.line = function() {
+    function drawing3d$line() {
       var x1, y1, z1, x2, y2, z2;
       
       if (arguments.length === 6) {
@@ -12458,7 +12423,7 @@
         curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(lineVerts), curContext.STREAM_DRAW);
         curContext.drawArrays(curContext.LINES, 0, 2);
       }
-    };
+    }
 
     /**
      * Draws a Bezier curve on the screen. These curves are defined by a series of anchor and control points. The first
@@ -12475,7 +12440,7 @@
      * @see bezierVertex
      * @see curve
      */
-    Drawing2D.prototype.bezier = function() {
+    function drawing2d$bezier() {
       if (arguments.length === 8){
         p.beginShape();
         p.vertex( arguments[0], arguments[1] );
@@ -12486,9 +12451,9 @@
       } else {
         throw("Please use the proper parameters!");
       }
-    };
+    }
     
-    Drawing3D.prototype.bezier = function() {
+    function drawing3d$bezier() {
       if (arguments.length === 12) {
         p.beginShape();
         p.vertex( arguments[0], arguments[1], arguments[2] );
@@ -12499,7 +12464,7 @@
       } else {
         throw("Please use the proper parameters!");
       }
-    };
+    }
 
     /**
      * Sets the resolution at which Beziers display. The default value is 20. This function is only useful when using the P3D
@@ -12649,7 +12614,7 @@
     * @see rectMode
     * @see quad
     */
-    Drawing2D.prototype.rect = function(x, y, width, height) {
+    function drawing2d$rect(x, y, width, height) {
       if (!width && !height) {
         return;
       }
@@ -12695,9 +12660,9 @@
       executeContextStroke();
 
       curContext.closePath();
-    };
+    }
     
-    Drawing3D.prototype.rect = function(x, y, width, height) {
+    function drawing3d$rect(x, y, width, height) {
       // Modeling transformation
       var model = new PMatrix3D();
       model.translate(x, y, 0);
@@ -12767,7 +12732,7 @@
         curContext.drawArrays(curContext.TRIANGLE_FAN, 0, rectVerts.length / 3);
         curContext.disable(curContext.POLYGON_OFFSET_FILL);
       }
-    };
+    }
 
     /**
      * Draws an ellipse (oval) in the display window. An ellipse with an equal <b>width</b> and <b>height</b> is a circle.
@@ -12781,7 +12746,7 @@
      *
      * @see ellipseMode
      */
-    DrawingShared.prototype.ellipse = function(x, y, width, height) {
+    function drawingShared$ellipse(x, y, width, height) {
       x = x || 0;
       y = y || 0;
 
@@ -12805,10 +12770,10 @@
       }
       
       return {'x':x, 'y':y, 'width':width, 'height':height};
-    };
+    }
     
-    Drawing2D.prototype.ellipse = function(x, y, width, height) {
-      var params = DrawingShared.prototype.ellipse.apply(this, arguments), offsetStart = 0;
+    function drawing2d$ellipse(x, y, width, height) {
+      var params = drawingShared$ellipse.apply(this, arguments), offsetStart = 0;
       x = params['x'];
       y = params['y'];
       width = params['width'];
@@ -12836,10 +12801,10 @@
         p.bezierVertex(x + c_x, y + h, x + w, y + c_y, x + w, y);
         p.endShape();
       }
-    };
+    }
     
-    Drawing3D.prototype.ellipse = function(x, y, width, height) {
-      var params = DrawingShared.prototype.ellipse.apply(this, arguments), offsetStart = 0;
+    function drawing3d$ellipse(x, y, width, height) {
+      var params = drawingShared$ellipse.apply(this, arguments), offsetStart = 0;
       x = params['x'];
       y = params['y'];
       width = params['width'];
@@ -12896,7 +12861,7 @@
         }
       }
       fill3D(fillVertArray, "TRIANGLE_FAN", colorVertArray);
-    };
+    }
 
     /**
     * Sets the current normal vector. This is for drawing three dimensional shapes and surfaces and
@@ -13920,7 +13885,7 @@
      * @see #tint()
      * @see #colorMode()
      */
-    DrawingShared.prototype.background = function() {
+    function drawingShared$background() {
       var color, img;
       // background params are either a color, a PImage or undefined which reapplies the lastBackgroundObj
       if (arguments.length === 1 && typeof arguments[0] === 'number') {
@@ -13950,10 +13915,10 @@
         
         lastBackgroundObj = color;
       }
-    };
+    }
     
-    Drawing2D.prototype.background = function() {
-      DrawingShared.prototype.background.apply(this, arguments);
+    function drawing2d$background() {
+      drawingShared$background.apply(this, arguments);
       
       if (typeof lastBackgroundObj === 'number') {
         saveContext();
@@ -13972,17 +13937,17 @@
         p.image(lastBackgroundObj, 0, 0);
         restoreContext();
       }
-    };
+    }
     
-    Drawing3D.prototype.background = function() {
-      DrawingShared.prototype.background.apply(this, arguments);
+    function drawing3d$background() {
+      drawingShared$background.apply(this, arguments);
       
       var c = p.color.toGLArray(lastBackgroundObj);
       curContext.clearColor(c[0], c[1], c[2], c[3]);
       curContext.clear(curContext.COLOR_BUFFER_BIT | curContext.DEPTH_BUFFER_BIT);
       
       // An image as a background in 3D is not implemented yet
-    };
+    }
 
     // Draws an image to the Canvas
     /**
@@ -14008,7 +13973,7 @@
     * @see background
     * @see alpha
     */
-    Drawing2D.prototype.image = function(img, x, y, w, h) {
+    function drawing2d$image(img, x, y, w, h) {
       if (img.width > 0) {
         var wid = w || img.width;
         var hgt = h || img.height;
@@ -14049,9 +14014,9 @@
             img.width, img.height, bounds.x, bounds.y, bounds.w, bounds.h);
         }
       }
-    };
+    }
     
-    Drawing3D.prototype.image = function(img, x, y, w, h) {
+    function drawing3d$image(img, x, y, w, h) {
       if (img.width > 0) {
         var wid = w || img.width;
         var hgt = h || img.height;
@@ -14064,7 +14029,7 @@
         p.vertex(x+wid, y, 0, wid, 0);
         p.endShape();
       }
-    };
+    }
 
     // Clears a rectangle in the Canvas element or the whole Canvas
     p.clear = function clear(x, y, width, height) {
@@ -15267,16 +15232,16 @@
      * @see #text
      * @see #textFont
      */
-    Drawing2D.prototype.textWidth = function(str) {
+    function drawing2d$textWidth(str) {
       curContext.font = curTextSize + "px " + curTextFont.name;
       if ("fillText" in curContext) {
         return curContext.measureText(str).width;
       } else if ("mozDrawText" in curContext) {
         return curContext.mozMeasureText(str);
       }
-    };
+    }
     
-    Drawing3D.prototype.textWidth = function(str) {
+    function drawing3d$textWidth(str) {
       if (textcanvas === undef) {
         textcanvas = document.createElement("canvas");
       }
@@ -15290,7 +15255,7 @@
       }
       curContext = oldContext;
       return textcanvas.width;
-    };
+    }
 
     p.textLeading = function textLeading(leading) {
       curTextLeading = leading;
@@ -15540,7 +15505,7 @@
     }
 
     // Print some text to the Canvas
-    Drawing2D.prototype.text$line = function(str, x, y, z, align) {
+    function drawing2d$text$line(str, x, y, z, align) {
       var textWidth = 0, xOffset = 0;
       // If the font is a standard Canvas font...
       if (!curTextFont.glyph) {
@@ -15606,9 +15571,9 @@
         }
         restoreContext();
       }
-    };
+    }
 
-    Drawing3D.prototype.text$line = function(str, x, y, z, align) {
+    function drawing3d$text$line(str, x, y, z, align) {
       // handle case for 3d text
       if (textcanvas === undef) {
         textcanvas = document.createElement("canvas");
@@ -15629,7 +15594,7 @@
       curContext.textBaseline="top";
 
       // paint on 2D canvas
-      Drawing2D.prototype.text$line(str,0,0,0,PConstants.LEFT);
+      drawing2d$text$line(str,0,0,0,PConstants.LEFT);
 
       // use it as a texture
       var aspect = textcanvas.width/textcanvas.height;
@@ -15678,7 +15643,7 @@
       uniformf("color2d", programObject2D, "color", fillStyle);
       curContext.bindBuffer(curContext.ELEMENT_ARRAY_BUFFER, indexBuffer);
       curContext.drawElements(curContext.TRIANGLES, 6, curContext.UNSIGNED_SHORT, 0);
-    };
+    }
 
     function text$4(str, x, y, z) {
       var lines, linesCount;
@@ -15703,7 +15668,7 @@
       }
       for(var i=0;i<linesCount;++i) {
         var line = lines[i];
-        drawing.text$line(line, x, y + yOffset, z, horizontalTextAlignment);
+        text$line(line, x, y + yOffset, z, horizontalTextAlignment);
         yOffset += curTextLeading;
       }
     }
@@ -15803,7 +15768,7 @@
         // stop if no enough space for one more line draw
         if (drawCommand.offset + boxYOffset2 + curTextSize > height) { break; }
         // finally, draw text on canvas
-        drawing.text$line(drawCommand.text, x + xOffset, y + drawCommand.offset + boxYOffset1 + boxYOffset2, z, horizontalTextAlignment);
+        text$line(drawCommand.text, x + xOffset, y + drawCommand.offset + boxYOffset1 + boxYOffset2, z, horizontalTextAlignment);
       }
     }
 
@@ -16715,54 +16680,96 @@
     Processing.debug = function(e) {};
 
     var wireDimensionalFunctions = function(mode) {
-      // Drawing2D/Drawing3D
+      // Drawing 2D/3D setup
       if (mode === '3D') {
-        drawing = new Drawing3D();
+        // Wire up 3D functions
+        p.translate = drawing3d$translate;
+        p.scale = drawing3d$scale;
+        p.pushMatrix = drawing3d$pushMatrix;
+        p.popMatrix = drawing3d$popMatrix;
+        p.resetMatrix = drawing3d$resetMatrix;
+        p.applyMatrix = drawingShared$applyMatrix;
+        p.rotate = drawing3d$rotate;
+        p.redraw = drawing3d$redraw;
+        p.size = drawing3d$size;
+        p.ambientLight = drawing3d$ambientLight;
+        p.directionalLight = drawing3d$directionalLight;
+        p.lightFalloff = drawing3d$lightFalloff;
+        p.lightSpecular = drawing3d$lightSpecular;
+        p.pointLight = drawing3d$pointLight;
+        p.noLights = drawing3d$noLights;
+        p.spotLight = drawing3d$spotLight;
+        p.box = drawing3d$box;
+        p.sphere = drawing3d$sphere;
+        p.ambient = drawing3d$ambient;
+        p.emissive = drawing3d$emissive;
+        p.shininess = drawing3d$shininess;
+        p.specular = drawing3d$specular;
+        p.fill = drawing3d$fill;
+        p.stroke = drawing3d$stroke;
+        p.strokeWeight = drawing3d$strokeWeight;
+        p.smooth = drawingShared$smooth;
+        p.noSmooth = drawingShared$noSmooth;
+        p.point = drawing3d$point;
+        p.vertex = drawing3d$vertex;
+        p.endShape = drawing3d$endShape;
+        p.bezierVertex = drawing3d$bezierVertex;
+        p.curveVertex = drawing3d$curveVertex;
+        p.curve = drawing3d$curve;
+        p.line = drawing3d$line;
+        p.bezier = drawing3d$bezier;
+        p.rect = drawing3d$rect;
+        p.ellipse = drawing3d$ellipse;
+        p.background = drawing3d$background;
+        p.image = drawing3d$image;
+        p.textWidth = drawing3d$textWidth;
+        text$line = drawing3d$text$line;
+        newPMatrix = drawing3d$newPMatrix;
       } else {
-        drawing = new Drawing2D();
+        // Wire up 2D functions
+        p.translate = drawing2d$translate;
+        p.scale = drawing2d$scale;
+        p.pushMatrix = drawing2d$pushMatrix;
+        p.popMatrix = drawing2d$popMatrix;
+        p.resetMatrix = drawing2d$resetMatrix;
+        p.applyMatrix = drawing2d$applyMatrix;
+        p.rotate = drawing2d$rotate;
+        p.redraw = drawing2d$redraw;
+        p.size = drawing2d$size;
+        p.ambientLight = drawingShared$a3DOnlyFunction;
+        p.directionalLight = drawingShared$a3DOnlyFunction;
+        p.lightFalloff = drawingShared$a3DOnlyFunction;
+        p.lightSpecular = drawingShared$a3DOnlyFunction;
+        p.pointLight = drawingShared$a3DOnlyFunction;
+        p.noLights = drawingShared$a3DOnlyFunction;
+        p.spotLight = drawingShared$a3DOnlyFunction;
+        p.box = drawingShared$a3DOnlyFunction;
+        p.sphere = drawingShared$a3DOnlyFunction;
+        p.ambient = drawingShared$a3DOnlyFunction;
+        p.emissive = drawingShared$a3DOnlyFunction;
+        p.shininess = drawingShared$a3DOnlyFunction;
+        p.specular = drawingShared$a3DOnlyFunction;
+        p.fill = drawing2d$fill;
+        p.stroke = drawing2d$stroke;
+        p.strokeWeight = drawing2d$strokeWeight;
+        p.smooth = drawing2d$smooth;
+        p.noSmooth = drawing2d$noSmooth;
+        p.point = drawing2d$point;
+        p.vertex = drawing2d$vertex;
+        p.endShape = drawing2d$endShape;
+        p.bezierVertex = drawing2d$bezierVertex;
+        p.curveVertex = drawing2d$curveVertex;
+        p.curve = drawing2d$curve;
+        p.line = drawing2d$line;
+        p.bezier = drawing2d$bezier;
+        p.rect = drawing2d$rect;
+        p.ellipse = drawing2d$ellipse;
+        p.background = drawing2d$background;
+        p.image = drawing2d$image;
+        p.textWidth = drawing2d$textWidth;
+        text$line = drawing2d$text$line;
+        newPMatrix = drawing2d$newPMatrix;
       }
-      
-      // Wire up functions (Should this be put into an array instead?)
-      p.translate = drawing.translate;
-      p.scale = drawing.scale;
-      p.pushMatrix = drawing.pushMatrix;
-      p.popMatrix = drawing.popMatrix;
-      p.resetMatrix = drawing.resetMatrix;
-      p.applyMatrix = drawing.applyMatrix;
-      p.rotate = drawing.rotate;
-      p.redraw = drawing.redraw;
-      p.size = drawing.size;
-      p.ambientLight = drawing.ambientLight;
-      p.directionalLight = drawing.directionalLight;
-      p.lightFalloff = drawing.lightFalloff;
-      p.lightSpecular = drawing.lightSpecular;
-      p.pointLight = drawing.pointLight;
-      p.noLights = drawing.noLights;
-      p.spotLight = drawing.spotLight;
-      p.box = drawing.box;
-      p.sphere = drawing.sphere;
-      p.ambient = drawing.ambient;
-      p.emissive = drawing.emissive;
-      p.shininess = drawing.shininess;
-      p.specular = drawing.specular;
-      p.fill = drawing.fill;
-      p.stroke = drawing.stroke;
-      p.strokeWeight = drawing.strokeWeight;
-      p.smooth = drawing.smooth;
-      p.noSmooth = drawing.noSmooth;
-      p.point = drawing.point;
-      p.vertex = drawing.vertex;
-      p.endShape = drawing.endShape;
-      p.bezierVertex = drawing.bezierVertex;
-      p.curveVertex = drawing.curveVertex;
-      p.curve = drawing.curve;
-      p.line = drawing.line;
-      p.bezier = drawing.bezier;
-      p.rect = drawing.rect;
-      p.ellipse = drawing.ellipse;
-      p.background = drawing.background;
-      p.image = drawing.image;
-      p.textWidth = drawing.textWidth;
     };
 
     // Send aCode Processing syntax to be converted to JavaScript
