@@ -155,6 +155,21 @@ class ProcessingTests(object):
                       for ln in m2.group(1).split(','):
                         self.linesCalled.add(int(ln))
 
+  def getAdditionalJsFiles(self, pdeFile):
+      f = open(pdeFile, 'r')
+      content = f.read()
+      f.close()
+
+      files = []
+      m = re.search('/\*\s*@pjs-test\s+(.*?)\*/', content, re.DOTALL)
+      if m and m.group:
+        m2 = re.search('libraries\s*=\s*["\'](.*?)["\']', m.group(1), re.DOTALL)
+        if m2 and m2.group:
+          for lib in m2.group(1).split(','):
+            files.append('-f')
+            files.append(os.path.join(self.toolsdir, '../libraries/', lib))
+      return files
+
   def runUnitTests(self, jsshell, testPattern=None, summaryOnly=False, processingPath=None):
       """Run all .js unit tests in test/unit through the test harness."""
       # TODO: add support for doing .pjs unit tests.
@@ -195,8 +210,9 @@ class ProcessingTests(object):
                   testCmd = [jsshell,
                              '-f', os.path.join(self.toolsdir, 'fake-dom.js'),
                              '-f', processing_js, #os.path.join(self.toolsdir, '..', 'processing.js'),
-                             '-f', os.path.join(self.toolsdir, 'test-harness-lib.js'),
-                             '-e', execTest]
+                             '-f', os.path.join(self.toolsdir, 'test-harness-lib.js')]
+                  testCmd.extend(self.getAdditionalJsFiles(fullpath))
+                  testCmd.extend(['-e', execTest])
               else:
                 continue
 

@@ -67,37 +67,43 @@
  
 void setup() {
   size(100,1);
+
   ArrayList list = new ArrayList();
+
   list.add(new A(1));
   list.add(new A(6));
   list.add(new A(2));
-  
+
   Collections.sort(list, new CompA());
-  
+
   println(list.toArray());
 } 
 
-class A // : Comparable<A>
+class A // implements Comparable<A>
 {
   int i;
-  A(i) {
+
+  A(int i) {
     this.i = i;
   }
+
   int compareTo(A other) {
     return this.i - other.i;
   }
+
   String toString() {
     return "[" + i + "]";
   }
 }
 
-class CompA // : Comparator<A>
+class CompA // implements Comparator<A>
 {
   int compare(A x, A y) {
     return y.i - x.i; // reverse order
   }
-  bool equals(A x, A y) {
-    return x.i === y.i; // reverse order
+
+  boolean equals(A x, A y) {
+    return x.i == y.i;
   }
 }
 	</script> 
