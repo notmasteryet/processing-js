@@ -18644,58 +18644,66 @@
 //#endif
   };
 
-  // Automatic Initialization Method
-  var init = function() {
-    function loadAndExecute(canvas, sources) {
-      var code = [], errors = [], sourcesCount = sources.length, loaded = 0;
+  function loadSketchFromSources(canvas, sources) {
+    var code = [], errors = [], sourcesCount = sources.length, loaded = 0;
 
-      function ajaxAsync(url, callback) {
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function() {
-          if (xhr.readyState === 4) {
-            var error;
-            if (xhr.status !== 200 && xhr.status !== 0) {
-              error = "Invalid XHR status " + xhr.status;
-            } else if (xhr.responseText === "") {
-              error = "No content";
-            }
-            callback(xhr.responseText, error);
+    function ajaxAsync(url, callback) {
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          var error;
+          if (xhr.status !== 200 && xhr.status !== 0) {
+            error = "Invalid XHR status " + xhr.status;
+          } else if (xhr.responseText === "") {
+            error = "No content";
           }
-        };
-        xhr.open("GET", url, true);
-        if (xhr.overrideMimeType) {
-          xhr.overrideMimeType("application/json");
+          callback(xhr.responseText, error);
         }
-        xhr.setRequestHeader("If-Modified-Since", "Fri, 01 Jan 1960 00:00:00 GMT"); // no cache
-        xhr.send(null);
+      };
+      xhr.open("GET", url, true);
+      if (xhr.overrideMimeType) {
+        xhr.overrideMimeType("application/json");
       }
-
-      function loadBlock(index, filename) {
-        ajaxAsync(filename, function (block, error) {
-          code[index] = block;
-          ++loaded;
-          if (error) {
-            errors.push("  " + filename + " ==> " + error);
-          }
-          if (loaded === sourcesCount) {
-            if (errors.length === 0) {
-              try {
-                return new Processing(canvas, code.join("\n"));
-              } catch(e) {
-                Processing.logger.log("Unable to execute pjs sketch: " + e);
-              }
-            } else {
-              Processing.logger.log("Unable to load pjs sketch files:\n" + errors.join("\n"));
-            }
-          }
-        });
-      }
-
-      for (var i = 0; i < sourcesCount; ++i) {
-        loadBlock(i, sources[i]);
-      }
+      xhr.setRequestHeader("If-Modified-Since", "Fri, 01 Jan 1960 00:00:00 GMT"); // no cache
+      xhr.send(null);
     }
 
+    function loadBlock(index, filename) {
+      ajaxAsync(filename, function (block, error) {
+        code[index] = block;
+        ++loaded;
+        if (error) {
+          errors.push("  " + filename + " ==> " + error);
+        }
+        if (loaded === sourcesCount) {
+          if (errors.length === 0) {
+            try {
+              return new Processing(canvas, code.join("\n"));
+            } catch(e) {
+              Processing.logger.log("Unable to execute pjs sketch: " + e);
+            }
+          } else {
+            Processing.logger.log("Unable to load pjs sketch files:\n" + errors.join("\n"));
+          }
+        }
+      });
+    }
+
+    for (var i = 0; i < sourcesCount; ++i) {
+      if (!sources[i]) {
+        // skipping empty path
+        code[i] = "";
+        ++loaded;
+        continue;
+      }
+      loadBlock(i, sources[i]);
+    }
+  }
+
+  Processing.loadSketchFromSources = loadSketchFromSources;
+
+  // Automatic Initialization Method
+  function init() {
     var canvas = document.getElementsByTagName('canvas');
 
     for (var i = 0, l = canvas.length; i < l; i++) {
@@ -18710,25 +18718,21 @@
       }
       if (processingSources) {
         var filenames = processingSources.split(' ');
-        for (var j = 0; j < filenames.length;) {
-          if (filenames[j]) {
-            j++;
-          } else {
-            filenames.splice(j, 1);
-          }
-        }
-
-        loadAndExecute(canvas[i], filenames);
+        loadSketchFromSources(canvas[i], filenames);
       }
+    }
+  }
+
+  Processing.disableInit = function() {
+    if (isDOMPresent) {
+      document.removeEventListener('DOMContentLoaded', init, false);
     }
   };
 
   if(isDOMPresent) {
     window['Processing'] = Processing;
 
-    document.addEventListener('DOMContentLoaded', function() {
-      init();
-    }, false);
+    document.addEventListener('DOMContentLoaded', init, false);
   } else {
     // DOM is not found
     this.Processing = Processing;
