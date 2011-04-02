@@ -12318,7 +12318,7 @@
         // shut off stroke for a minute
         var savedStroke = doStroke;
         doStroke = false;
-        startLUT = 0.5 + (start / PConstants.TWO_PI) * PConstants.SINCOS_LENGTH;
+        startLUT = -0.5 + (start / PConstants.TWO_PI) * PConstants.SINCOS_LENGTH;
         stopLUT  = 0.5 + (stop / PConstants.TWO_PI) * PConstants.SINCOS_LENGTH;
         p.beginShape();
         p.vertex(centerX, centerY);
@@ -12343,6 +12343,7 @@
           if (ii < 0) { ii += PConstants.SINCOS_LENGTH; }
           p.vertex(centerX + parseFloat(Math.cos(ii * PConstants.DEG_TO_RAD * 0.5)) * hr, centerY + parseFloat(Math.sin(ii * PConstants.DEG_TO_RAD * 0.5)) * vr);
         }
+        p.vertex(centerX + parseFloat(Math.cos(stopLUT * PConstants.DEG_TO_RAD * 0.5)) * hr, centerY + parseFloat(Math.sin(stopLUT * PConstants.DEG_TO_RAD * 0.5)) * vr);
         p.endShape();
         doFill = savedFill;
       }
