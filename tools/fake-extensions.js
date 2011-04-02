@@ -14,11 +14,19 @@ Processing.lib.MockExtensions = function() {
   this.INPUT = 0;
   this.OUTPUT = 0;
   this.HIGH = 0;
+  this.LOW = 0;
   this.BYTE = 0;
   this.pinMode = __noop_func__;
   this.digitalRead = function () { return 0; };
+  this.analogRead = function () { return 0; };
+  this.digitalWrite = __noop_func__;
+  this.analogWrite = __noop_func__;
+  this.delay = __noop_func__; // enable noop-delay for some electronic functions
   this.Serial = function() { };
   this.Serial.print = __noop_func__;
+  this.Serial.begin = __noop_func__;
+  this.Serial.available = __noop_func__;
+  this.Serial.read = __noop_func__;
   this.Serial.begin = __noop_func__;
   this.Servo = function() {
     this.attach = __noop_func__;  
@@ -170,6 +178,7 @@ Processing.lib.MockExtensions = function() {
 Processing.lib.MockExtensions.exports = [
   "OBJModel",
   "INPUT", "OUTPUT", "HIGH", "BYTE", "pinMode", "digitalRead", "Serial", "Servo",
+  "LOW", "analogRead", "analogWrite", "digitalWrite", "delay",
   "softkey", "multitap", "PClient", "Sound", "Phone",
   "Client", "Server", "Log", "CarnivoreP5",
   "beginRecord", "endRecord",

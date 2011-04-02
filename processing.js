@@ -1216,8 +1216,8 @@
     p.keyPressed      = function(){};  // needed to remove function checks
     p.keyReleased     = function(){};
     p.keyTyped        = function(){};
-    p.draw            = undef;
-    p.setup           = undef;
+    p.draw            = function(){};
+    p.setup           = function(){};
 
     // Remapped vars
     p.__mousePressed  = false;
@@ -7352,6 +7352,7 @@
       inDraw = true;
       
       saveContext();
+      curContext.setTransform(1, 0, 0, 1, 0, 0);
       p.draw();
       restoreContext();
       
@@ -7459,10 +7460,8 @@
     var eventHandlers = [];
 
     /**
-    * Quits/stops/exits the program. Programs without a draw() function exit automatically
-    * after the last line has run, but programs with draw() run continuously until the
-    * program is manually stopped or exit() is run.
-    * Rather than terminating immediately, exit() will cause the sketch to exit after draw()
+    * Quits/stops/exits the program. Programs run continuously until the
+    * program is exit() is run. That will cause the sketch to exit after draw()
     * has completed (or after setup() completes if called during the setup() method).
     *
     * @returns none
@@ -16895,23 +16894,15 @@
           curSketch.attach(processing, defaultScope);
 
           // Run void setup()
-          if (processing.setup) {
-            processing.setup();
-            // if any transforms were performed in setup reset to identify matrix so draw loop is unpolluted
-            if (!curSketch.use3DContext) {
-              curContext.setTransform(1, 0, 0, 1, 0, 0);
-            }
-          }
+          processing.setup();
 
           // some pixels can be cached, flushing
           resetContext();
 
-          if (processing.draw) {
-            if (!doLoop) {
-              processing.redraw();
-            } else {
-              processing.loop();
-            }
+          if (!doLoop) {
+            processing.redraw();
+          } else {
+            processing.loop();
           }
         } else {
           window.setTimeout(function() { executeSketch(processing); }, 10);
