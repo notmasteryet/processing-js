@@ -564,6 +564,7 @@ function DOMParser() {
   Node.prototype.hasAttributes = function() {
     return this.attributes.length > 0;
   };
+  Node.prototype.textContent = "";
 
   function Document() {
     var node = new Node();
@@ -590,6 +591,10 @@ function DOMParser() {
       text.appendData = function(arg) {
         this.nodeValue += arg;
       };
+      Object.defineProperty(text, "textContent", {
+        get: function() { return this.nodeValue; },
+        enumerable: true
+      });
       // TODO appendData, substringData, etc.
       return text;
     };
@@ -681,6 +686,17 @@ function DOMParser() {
         }
         return new NodeList(result);
       };
+      Object.defineProperty(element, "textContent", {
+        get: function() {
+          var result = "";
+          for (var i = 0; i < this.childNodes.length; ++i) {
+            result += this.childNodes[i].textContent;
+          }
+          return result;
+        },
+        enumerable: true
+      });
+
       return element;
     };
     node.createAttributeNS = function(namespaceURI, qualifiedName) {
@@ -729,6 +745,12 @@ function DOMParser() {
         }
       }
     };
+    Object.defineProperty(node, "textContent", {
+      get: function() {
+        return this.documentElement.textContent;
+      },
+      enumerable: true
+    });
     return node;
   }
 
