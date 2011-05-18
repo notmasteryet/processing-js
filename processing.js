@@ -1438,7 +1438,11 @@
         curEllipseMode = PConstants.CENTER,
         normalX = 0,
         normalY = 0,
-        normalZ = 0,
+        normalZ = 1,
+        vertexShininess = 0.5,
+        vertexSpecular = [0.5,0.5,0.5],
+        vertexAmbient = [0,0,0],
+        vertexEmissive = [0,0,0],
         normalMode = PConstants.NORMAL_MODE_AUTO,
         inDraw = false,
         curFrameRate = 60,
@@ -1492,10 +1496,20 @@
         boxOutlineBuffer,
         rectBuffer,
         rectNormBuffer,
+        sphereBufferLength,
         sphereBuffer,
+        sphereShininessBuffer,
+        sphereSpecularBuffer,
+        sphereEmissiveBuffer,
+        sphereAmbientBuffer,
         lineBuffer,
         fillBuffer,
         fillColorBuffer,
+        fillShininessBuffer,
+        fillSpecularBuffer,
+        fillEmissiveBuffer,
+        fillAmbientBuffer,
+        fillNormalBuffer,
         strokeColorBuffer,
         pointBuffer,
         shapeTexVBO,
@@ -1688,17 +1702,14 @@
       "attribute vec3 Vertex;" +
       "attribute vec3 Normal;" +
       "attribute vec4 aColor;" +
+      "attribute float aShininess;" +
+      "attribute vec3 aSpecular;" +
+      "attribute vec3 aEmissive;" +
+      "attribute vec3 aAmbient;" +
       "attribute vec2 aTexture;" +
       "varying   vec2 vTexture;" +
 
       "uniform vec4 color;" +
-
-      "uniform bool usingMat;" +
-      "uniform vec3 specular;" +
-      "uniform vec3 mat_emissive;" +
-      "uniform vec3 mat_ambient;" +
-      "uniform vec3 mat_specular;" +
-      "uniform float shininess;" +
 
       "uniform mat4 model;" +
       "uniform mat4 view;" +
@@ -1707,6 +1718,7 @@
 
       "uniform int lightCount;" +
       "uniform vec3 falloff;" +
+      "uniform vec3 specular;" +
 
       // careful changing the order of these fields. Some cards
       // have issues with memory alignment
@@ -1750,7 +1762,7 @@
       // Get the distance from the current vector to the light position
       "  float d = length( light.position - ecPos );" +
       "  float attenuation = 1.0 / ( falloff[0] + ( falloff[1] * d ) + ( falloff[2] * d * d ));" +
-      "  totalAmbient += light.color * attenuation;" +
+      "  totalAmbient += aAmbient * light.color * attenuation;" +
       "}" +
 
       "void DirectionalLight( inout vec3 col, inout vec3 spec, in vec3 vertNormal, in vec3 ecPos, in Light light ) {" +
@@ -1759,7 +1771,7 @@
       "  float nDotVH = max(0.0, dot( vertNormal, normalize(-light.position-normalize(ecPos) )));" +
 
       "  if( nDotVP != 0.0 ){" +
-      "    powerfactor = pow( nDotVH, shininess );" +
+      "    powerfactor = pow( nDotVH, aShininess );" +
       "  }" +
 
       "  col += light.color * nDotVP;" +
@@ -1788,7 +1800,7 @@
       "    powerfactor = 0.0;" +
       "  }" +
       "  else{" +
-      "    powerfactor = pow( nDotHV, shininess );" +
+      "    powerfactor = pow( nDotHV, aShininess );" +
       "  }" +
 
       "  spec += specular * powerfactor * attenuation;" +
@@ -1834,7 +1846,7 @@
       "    powerfactor = 0.0;" +
       "  }" +
       "  else {" +
-      "    powerfactor = pow( nDotHV, shininess );" +
+      "    powerfactor = pow( nDotHV, aShininess );" +
       "  }" +
 
       "  spec += specular * powerfactor * attenuation;" +
@@ -1864,7 +1876,7 @@
       // If there were no lights this draw call, just use the
       // assigned fill color of the shape and the specular value
       "  if( lightCount == 0 ) {" +
-      "    frontColor = col + vec4(mat_specular,1.0);" +
+      "    frontColor = col + vec4(aSpecular,1.0);" +
       "  }" +
       "  else {" +
            // WebGL forces us to iterate over a constant value
@@ -1892,21 +1904,12 @@
       "      }" +
       "    }" +
 
-      "   if( usingMat == false ) {" +
       "     frontColor = vec4(" +
+      "       aEmissive +" +
       "       vec3(col) * finalAmbient +" +
       "       vec3(col) * finalDiffuse +" +
-      "       vec3(col) * finalSpecular," +
+      "       aSpecular * finalSpecular," +
       "       col[3] );" +
-      "   }" +
-      "   else{" +
-      "     frontColor = vec4( " +
-      "       mat_emissive + " +
-      "       (vec3(col) * mat_ambient * finalAmbient) + " +
-      "       (vec3(col) * finalDiffuse) + " +
-      "       (mat_specular * finalSpecular), " +
-      "       col[3] );" +
-      "    }" +
       "  }" +
 
       "  vTexture.xy = aTexture.xy;" +
@@ -7495,10 +7498,9 @@
       // user set in the last draw() call.
       p.noLights();
       p.lightFalloff(1, 0, 0);
-      p.shininess(1);
-      p.ambient(255, 255, 255);
-      p.specular(128, 128, 128);
-      p.emissive(0, 0, 0);
+      p.lightSpecular(0, 0, 0);
+      normalX = 0; normalY = 0; normalZ = 1;
+
       p.camera();
       p.draw();
       
@@ -9412,7 +9414,8 @@
         // assume we aren't using textures by default
         uniformi("usingTexture3d", programObject3D, "usingTexture", usingTexture);
         p.lightFalloff(1, 0, 0);
-        p.shininess(1);
+        p.lightSpecular(0, 0, 0);
+        p.shininess(0.5);
         p.ambient(255, 255, 255);
         p.specular(128, 128, 128);
         p.emissive(0, 0, 0);
@@ -9443,12 +9446,21 @@
         // can change the level of detail. Everytime the user does that
         // using sphereDetail(), the new vertices are calculated.
         sphereBuffer = curContext.createBuffer();
+        sphereShininessBuffer = curContext.createBuffer();
+        sphereSpecularBuffer = curContext.createBuffer();
+        sphereEmissiveBuffer = curContext.createBuffer();
+        sphereAmbientBuffer = curContext.createBuffer();
 
         lineBuffer = curContext.createBuffer();
 
         // Shape buffers
         fillBuffer = curContext.createBuffer();
         fillColorBuffer = curContext.createBuffer();
+        fillShininessBuffer = curContext.createBuffer();
+        fillSpecularBuffer = curContext.createBuffer();
+        fillEmissiveBuffer = curContext.createBuffer();
+        fillAmbientBuffer = curContext.createBuffer();
+        fillNormalBuffer = curContext.createBuffer();
         strokeColorBuffer = curContext.createBuffer();
         shapeTexVBO = curContext.createBuffer();
 
@@ -10106,6 +10118,34 @@
           normalMatrix.transpose();
 
           uniformMatrix("normalTransform3d", programObject3D, "normalTransform", false, normalMatrix.array());
+
+          var boxBufferLength = boxVerts.length / 3;
+          var shininessArray = new Float32Array(boxBufferLength);
+          var specularArray = new Float32Array(boxBufferLength * 3);
+          var emissiveArray = new Float32Array(boxBufferLength * 3);
+          var ambientArray = new Float32Array(boxBufferLength * 3);
+          for (var i = 0, j = 0; i < boxBufferLength; ++i, j += 3) {
+            shininessArray[i] = vertexShininess;
+            specularArray[j] = vertexSpecular[0];
+            specularArray[j + 1] = vertexSpecular[1];
+            specularArray[j + 2] = vertexSpecular[2];
+            emissiveArray[j] = vertexEmissive[0];
+            emissiveArray[j + 1] = vertexEmissive[1];
+            emissiveArray[j + 2] = vertexEmissive[2];
+            ambientArray[j] = vertexAmbient[0];
+            ambientArray[j + 1] = vertexAmbient[1];
+            ambientArray[j + 2] = vertexAmbient[2];
+          }
+
+          vertexAttribPointer("aShininess3d", programObject3D, "aShininess", 1, sphereShininessBuffer);
+          curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(shininessArray), curContext.STREAM_DRAW);
+          vertexAttribPointer("aSpecular3d", programObject3D, "aSpecular", 3, sphereSpecularBuffer);
+          curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(specularArray), curContext.STREAM_DRAW);
+          vertexAttribPointer("aEmissive3d", programObject3D, "aEmissive", 3, sphereEmissiveBuffer);
+          curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(emissiveArray), curContext.STREAM_DRAW);
+          vertexAttribPointer("aAmbient3d", programObject3D, "aAmbient", 3, sphereAmbientBuffer);
+          curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(ambientArray), curContext.STREAM_DRAW);
+
           vertexAttribPointer("normal3d", programObject3D, "Normal", 3, boxNormBuffer);
         }
         else{
@@ -10216,6 +10256,7 @@
       //set the buffer data
       curContext.bindBuffer(curContext.ARRAY_BUFFER, sphereBuffer);
       curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(sphereVerts), curContext.STATIC_DRAW);
+      sphereBufferLength = sphereVerts.length / 3;
     };
 
     /**
@@ -10346,6 +10387,33 @@
           normalMatrix.transpose();
           
           uniformMatrix("normalTransform3d", programObject3D, "normalTransform", false, normalMatrix.array());
+
+          var shininessArray = new Float32Array(sphereBufferLength);
+          var specularArray = new Float32Array(sphereBufferLength * 3);
+          var emissiveArray = new Float32Array(sphereBufferLength * 3);
+          var ambientArray = new Float32Array(sphereBufferLength * 3);
+          for (var i = 0, j = 0; i < sphereBufferLength; ++i, j += 3) {
+            shininessArray[i] = vertexShininess;
+            specularArray[j] = vertexSpecular[0];
+            specularArray[j + 1] = vertexSpecular[1];
+            specularArray[j + 2] = vertexSpecular[2];
+            emissiveArray[j] = vertexEmissive[0];
+            emissiveArray[j + 1] = vertexEmissive[1];
+            emissiveArray[j + 2] = vertexEmissive[2];
+            ambientArray[j] = vertexAmbient[0];
+            ambientArray[j + 1] = vertexAmbient[1];
+            ambientArray[j + 2] = vertexAmbient[2];
+          }
+
+          vertexAttribPointer("aShininess3d", programObject3D, "aShininess", 1, sphereShininessBuffer);
+          curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(shininessArray), curContext.STREAM_DRAW);
+          vertexAttribPointer("aSpecular3d", programObject3D, "aSpecular", 3, sphereSpecularBuffer);
+          curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(specularArray), curContext.STREAM_DRAW);
+          vertexAttribPointer("aEmissive3d", programObject3D, "aEmissive", 3, sphereEmissiveBuffer);
+          curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(emissiveArray), curContext.STREAM_DRAW);
+          vertexAttribPointer("aAmbient3d", programObject3D, "aAmbient", 3, sphereAmbientBuffer);
+          curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(ambientArray), curContext.STREAM_DRAW);
+
           vertexAttribPointer("normal3d", programObject3D, "Normal", 3, sphereBuffer);
         }
         else{
@@ -10521,23 +10589,20 @@
       var a = arguments;
 
       // either a shade of gray or a 'color' object.
-      curContext.useProgram(programObject3D);
-      uniformi("usingMat3d", programObject3D, "usingMat", true);
-
       if (a.length === 1) {
         // color object was passed in
         if (typeof a[0] === "string") {
           var c = a[0].slice(5, -1).split(",");
-          uniformf("mat_ambient3d", programObject3D, "mat_ambient", [c[0] / 255, c[1] / 255, c[2] / 255]);
+          vertexAmbient = [c[0] / 255, c[1] / 255, c[2] / 255];
         }
         // else a single number was passed in for gray shade
         else {
-          uniformf("mat_ambient3d", programObject3D, "mat_ambient", [a[0] / 255, a[0] / 255, a[0] / 255]);
+          vertexAmbient = [a[0] / 255, a[0] / 255, a[0] / 255];
         }
       }
       // Otherwise three values were provided (r,g,b)
       else {
-        uniformf("mat_ambient3d", programObject3D, "mat_ambient", [a[0] / 255, a[1] / 255, a[2] / 255]);
+        vertexAmbient = [a[0] / 255, a[1] / 255, a[2] / 255];
       }
     };
 
@@ -10571,25 +10636,22 @@
       // create an alias to shorten code
       var a = arguments;
 
-      curContext.useProgram(programObject3D);
-      uniformi("usingMat3d", programObject3D, "usingMat", true);
-
       // If only one argument was provided, the user either gave us a
       // shade of gray or a 'color' object.
       if (a.length === 1) {
         // color object was passed in
         if (typeof a[0] === "string") {
           var c = a[0].slice(5, -1).split(",");
-          uniformf("mat_emissive3d", programObject3D, "mat_emissive", [c[0] / 255, c[1] / 255, c[2] / 255]);
+          vertexEmissive = [c[0] / 255, c[1] / 255, c[2] / 255];
         }
         // else a regular number was passed in for gray shade
         else {
-          uniformf("mat_emissive3d", programObject3D, "mat_emissive", [a[0] / 255, a[0] / 255, a[0] / 255]);
+          vertexEmissive = [a[0] / 255, a[0] / 255, a[0] / 255];
         }
       }
       // Otherwise three values were provided (r,g,b)
       else {
-        uniformf("mat_emissive3d", programObject3D, "mat_emissive", [a[0] / 255, a[1] / 255, a[2] / 255]);
+        vertexEmissive = [a[0] / 255, a[1] / 255, a[2] / 255];
       }
     };
 
@@ -10605,9 +10667,7 @@
     Drawing2D.prototype.shininess = DrawingShared.prototype.a3DOnlyFunction;
     
     Drawing3D.prototype.shininess = function(shine) {
-      curContext.useProgram(programObject3D);
-      uniformi("usingMat3d", programObject3D, "usingMat", true);
-      uniformf("shininess3d", programObject3D, "shininess", shine);
+      vertexShininess = shine;
     };
 
     /**
@@ -10650,10 +10710,7 @@
     
     Drawing3D.prototype.specular = function() {
       var c = p.color.apply(this, arguments);
-
-      curContext.useProgram(programObject3D);
-      uniformi("usingMat3d", programObject3D, "usingMat", true);
-      uniformf("mat_specular3d", programObject3D, "mat_specular", p.color.toGLArray(c).slice(0, 3));
+      vertexSpecular = p.color.toGLArray(c).slice(0, 3);
     };
 
     ////////////////////////////////////////////////////////////////////////////
@@ -11149,6 +11206,11 @@
       vert[13] = normalX;
       vert[14] = normalY;
       vert[15] = normalZ;
+      //attributes
+      vert[16] = vertexShininess;
+      vert[17] = vertexSpecular;
+      vert[18] = vertexEmissive;
+      vert[19] = vertexAmbient;
       
       vertArray.push(vert);
     };
@@ -11248,7 +11310,7 @@
      * @see endShape
      * @see vertex
      */
-    var fill3D = function(vArray, mode, cArray, tArray){
+    var fill3D = function(vArray, mode, cArray, tArray, shininessArray, specularArray, emissiveArray, ambientArray, normalArray){
       var ctxMode;
       if(mode === "TRIANGLES"){
         ctxMode = curContext.TRIANGLES;
@@ -11260,6 +11322,8 @@
         ctxMode = curContext.TRIANGLE_STRIP;
       }
 
+      var model = new PMatrix3D();
+
       var view = new PMatrix3D();
       view.scale(1, -1, 1);
       view.apply(modelView.array());
@@ -11270,7 +11334,7 @@
       proj.transpose();
 
       curContext.useProgram( programObject3D );
-      uniformMatrix("model3d", programObject3D, "model", false,  [1,0,0,0,  0,1,0,0,   0,0,1,0,   0,0,0,1] );
+      uniformMatrix("model3d", programObject3D, "model", false,  model.array() );
       uniformMatrix("view3d", programObject3D, "view", false, view.array() );
       uniformMatrix("projection3d", programObject3D, "projection", false, proj.array() );
 
@@ -11285,8 +11349,37 @@
       vertexAttribPointer("aColor3d", programObject3D, "aColor", 4, fillColorBuffer);
       curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(cArray), curContext.STREAM_DRAW);
 
-      // No support for lights....yet
-      disableVertexAttribPointer("normal3d", programObject3D, "Normal");
+      if(lightCount > 0){
+        var v = new PMatrix3D();
+        v.set(view);
+
+        var m = new PMatrix3D();
+        m.set(model);
+
+        v.mult(m);
+
+        var normalMatrix = new PMatrix3D();
+        normalMatrix.set(v);
+        normalMatrix.invert();
+        normalMatrix.transpose();
+
+        uniformMatrix("normalTransform3d", programObject3D, "normalTransform", false, normalMatrix.array());
+
+        vertexAttribPointer("aShininess3d", programObject3D, "aShininess", 1, fillShininessBuffer);
+        curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(shininessArray), curContext.STREAM_DRAW);
+        vertexAttribPointer("aSpecular3d", programObject3D, "aSpecular", 3, fillSpecularBuffer);
+        curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(specularArray), curContext.STREAM_DRAW);
+        vertexAttribPointer("aEmissive3d", programObject3D, "aEmissive", 3, fillEmissiveBuffer);
+        curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(emissiveArray), curContext.STREAM_DRAW);
+        vertexAttribPointer("aAmbient3d", programObject3D, "aAmbient", 3, fillAmbientBuffer);
+        curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(ambientArray), curContext.STREAM_DRAW);
+
+        vertexAttribPointer("normal3d", programObject3D, "Normal", 3, fillNormalBuffer);
+        curContext.bufferData(curContext.ARRAY_BUFFER, new Float32Array(normalArray), curContext.STREAM_DRAW);
+      }
+      else{
+        disableVertexAttribPointer("normal3d", programObject3D, "Normal");
+      }
 
       var i;
 
@@ -11312,6 +11405,14 @@
 
       curContext.drawArrays( ctxMode, 0, vArray.length/3 );
       curContext.disable( curContext.POLYGON_OFFSET_FILL );
+    };
+
+    var calcTriangleNormal3D = function(coords, offset, offset1, offset2, out, offset) {
+      var dv1X = coords[offset1] - coords[offset], dv1Y = coords[offset1 + 1] - coords[offset + 1], dv1Z = coords[offset1 + 2] - coords[offset + 2];
+      var dv2X = coords[offset2] - coords[offset], dv2Y = coords[offset2 + 1] - coords[offset + 1], dv2Z = coords[offset2 + 2] - coords[offset + 2];
+      out[offset] = dv1Y * dv2Z - dv1Z * dv2Y;
+      out[offset + 1] = dv1Z * dv2X - dv1X * dv2Z;
+      out[offset + 2] = dv1X * dv2Y - dv1Y * dv2X;
     };
 
     /**
@@ -11636,63 +11737,86 @@
       var colorVertArray = [];
       var strokeVertArray = [];
       var texVertArray = [];
+      var shininessVertArray = [];
+      var specularVertArray = [];
+      var emissiveVertArray = [];
+      var ambientVertArray = [];
+      var normalVertArray = [];
       var cachedVertArray;
 
       firstVert = true;
       var i, j, k;
       var vertArrayLength = vertArray.length;
 
+      // 1,2,3
+      // X,Y,Z
+      // 3,4
+      // U,V - texture
+      // 5,6,7,8
+      // R,G,B,A - fill colour
+      // 9,10,11,12
+      // R, G, B, A - stroke colour
+      // 13,14,15
+      // normal
+      // 16,17,18,19
+      // shininess, specular[3], emissive[3], ambient[3]
       for (i = 0; i < vertArrayLength; i++) {
         cachedVertArray = vertArray[i];
         for (j = 0; j < 3; j++) {
           fillVertArray.push(cachedVertArray[j]);
         }
-      }
-
-      // 5,6,7,8
-      // R,G,B,A - fill colour
-      for (i = 0; i < vertArrayLength; i++) {
-        cachedVertArray = vertArray[i];
         for (j = 5; j < 9; j++) {
           colorVertArray.push(cachedVertArray[j]);
         }
-      }
-
-      // 9,10,11,12
-      // R, G, B, A - stroke colour
-      for (i = 0; i < vertArrayLength; i++) {
-        cachedVertArray = vertArray[i];
         for (j = 9; j < 13; j++) {
           strokeVertArray.push(cachedVertArray[j]);
         }
-      }
-
-      // texture u,v
-      for (i = 0; i < vertArrayLength; i++) {
-        cachedVertArray = vertArray[i];
+        for (j = 13; j < 16; j++) {
+          normalVertArray.push(cachedVertArray[j]);
+        }
         texVertArray.push(cachedVertArray[3]);
         texVertArray.push(cachedVertArray[4]);
+        shininessVertArray.push(cachedVertArray[16]);
+        specularVertArray.push(cachedVertArray[17][0]);
+        specularVertArray.push(cachedVertArray[17][1]);
+        specularVertArray.push(cachedVertArray[17][2]);
+        emissiveVertArray.push(cachedVertArray[18][0]);
+        emissiveVertArray.push(cachedVertArray[18][1]);
+        emissiveVertArray.push(cachedVertArray[18][2]);
+        ambientVertArray.push(cachedVertArray[19][0]);
+        ambientVertArray.push(cachedVertArray[19][1]);
+        ambientVertArray.push(cachedVertArray[19][2]);
       }
 
       // if shape is closed, push the first point into the last point (including colours)
       if (closeShape) {
-        fillVertArray.push(vertArray[0][0]);
-        fillVertArray.push(vertArray[0][1]);
-        fillVertArray.push(vertArray[0][2]);
-
+        cachedVertArray = vertArray[0];
+        for (j = 0; j < 3; j++) {
+          fillVertArray.push(cachedVertArray[j]);
+        }
         for (i = 5; i < 9; i++) {
-          colorVertArray.push(vertArray[0][i]);
+          colorVertArray.push(cachedVertArray[i]);
         }
-
         for (i = 9; i < 13; i++) {
-          strokeVertArray.push(vertArray[0][i]);
+          strokeVertArray.push(cachedVertArray[i]);
         }
-
-        texVertArray.push(vertArray[0][3]);
-        texVertArray.push(vertArray[0][4]);
+        for (j = 13; j < 16; j++) {
+          normalVertArray.push(cachedVertArray[j]);
+        }
+        texVertArray.push(cachedVertArray[3]);
+        texVertArray.push(cachedVertArray[4]);
+        shininessVertArray.push(cachedVertArray[16]);
+        specularVertArray.push(cachedVertArray[17][0]);
+        specularVertArray.push(cachedVertArray[17][1]);
+        specularVertArray.push(cachedVertArray[17][2]);
+        emissiveVertArray.push(cachedVertArray[18][0]);
+        emissiveVertArray.push(cachedVertArray[18][1]);
+        emissiveVertArray.push(cachedVertArray[18][2]);
+        ambientVertArray.push(cachedVertArray[19][0]);
+        ambientVertArray.push(cachedVertArray[19][1]);
+        ambientVertArray.push(cachedVertArray[19][2]);
       }
       // End duplication
-      
       // bezierVertex
       else if ( isBezier && (curShape === PConstants.POLYGON || curShape === undef) ) {
         lineVertArray = fillVertArray;
@@ -11702,7 +11826,7 @@
           line3D(lineVertArray, null, strokeVertArray);
         }
         if (doFill) {
-          fill3D(fillVertArray, "TRIANGLES", colorVertArray);
+          fill3D(fillVertArray, "TRIANGLES", colorVertArray, texVertArray, shininessVertArray, specularVertArray, emissiveVertArray, ambientVertArray, normalVertArray);
         }
       }
       
@@ -11731,6 +11855,18 @@
           }
           line3D(lineVertArray, "LINES", strokeVertArray);  // render function for lines
         } else if (curShape === PConstants.TRIANGLES) {     // if TRIANGLES was the specified parameter in beginShape
+          // 1,2,3
+          // X,Y,Z
+          // 3,4
+          // U,V - texture
+          // 5,6,7,8
+          // R,G,B,A - fill colour
+          // 9,10,11,12
+          // R, G, B, A - stroke colour
+          // 13,14,15
+          // normal
+          // 16,17,18,19
+          // shininess, specular[3], emissive[3], ambient[3]
           if (vertArrayLength > 2) {
             for (i = 0; (i+2) < vertArrayLength; i+=3) {   // loop through the array per triangle
               fillVertArray = [];
@@ -11738,10 +11874,16 @@
               lineVertArray = [];
               colorVertArray = [];
               strokeVertArray = [];
+              shininessVertArray = [];
+              specularVertArray = [];
+              emissiveVertArray = [];
+              ambientVertArray = [];
+              normalVertArray = [];
               for (j = 0; j < 3; j++) {
                 for (k = 0; k < 3; k++) {                   // loop through and push
                   lineVertArray.push(vertArray[i+j][k]);    // the line point location information
                   fillVertArray.push(vertArray[i+j][k]);    // and fill point location information
+                  normalVertArray.push(vertArray[i+j][k+13]);
                 }
               }
               for (j = 0; j < 3; j++) {                     // loop through and push the texture information
@@ -11755,11 +11897,25 @@
                   strokeVertArray.push(vertArray[i+j][k+4]);// and the stroke information
                 }
               }
+              for (j = 0; j < 3; j++) {
+                shininessVertArray.push(vertArray[i+j][16]);
+                for (k = 0; k < 3; k++) {
+                  specularVertArray.push(vertArray[i+j][17][k]);
+                  emissiveVertArray.push(vertArray[i+j][18][k]);
+                  ambientVertArray.push(vertArray[i+j][19][k]);
+                }
+              }
+              if (normalMode == PConstants.NORMAL_MODE_AUTO) {
+                calcTriangleNormal3D(fillVertArray, 0, 6, 3, normalVertArray, 0);
+                for (k = 3; k < 9; k++) {
+                  normalVertArray[k] = normalVertArray[k-3];
+                }
+              }
               if (doStroke) {
                 line3D(lineVertArray, "LINE_LOOP", strokeVertArray );               // line render function
               }
               if (doFill || usingTexture) {
-                fill3D(fillVertArray, "TRIANGLES", colorVertArray, texVertArray);   // fill shape render function
+                fill3D(fillVertArray, "TRIANGLES", colorVertArray, texVertArray, shininessVertArray, specularVertArray, emissiveVertArray, ambientVertArray, normalVertArray);   // fill shape render function
               }
             }
           }
@@ -11771,6 +11927,11 @@
               strokeVertArray = [];
               colorVertArray = [];
               texVertArray = [];
+              shininessVertArray = [];
+              specularVertArray = [];
+              emissiveVertArray = [];
+              ambientVertArray = [];
+              normalVertArray = [];
               for (j = 0; j < 3; j++) {
                 for (k = 0; k < 3; k++) {
                   lineVertArray.push(vertArray[i+j][k]);
@@ -11790,7 +11951,7 @@
               }
 
               if (doFill || usingTexture) {
-                fill3D(fillVertArray, "TRIANGLE_STRIP", colorVertArray, texVertArray);
+                fill3D(fillVertArray, "TRIANGLE_STRIP", colorVertArray, texVertArray, shininessVertArray, specularVertArray, emissiveVertArray, ambientVertArray, normalVertArray);
               }
               if (doStroke) {
                 line3D(lineVertArray, "LINE_LOOP", strokeVertArray);
@@ -11842,7 +12003,7 @@
               }
             }
             if (doFill || usingTexture) {
-              fill3D(fillVertArray, "TRIANGLE_FAN", colorVertArray, texVertArray);
+              fill3D(fillVertArray, "TRIANGLE_FAN", colorVertArray, texVertArray, shininessVertArray, specularVertArray, emissiveVertArray, ambientVertArray, normalVertArray);
             }
           }
         } else if (curShape === PConstants.QUADS) {
@@ -11862,46 +12023,40 @@
               fillVertArray = [];
               colorVertArray = [];
               texVertArray = [];
-              for (j = 0; j < 3; j++) {
-                fillVertArray.push(vertArray[i][j]);
+              shininessVertArray = [];
+              specularVertArray = [];
+              emissiveVertArray = [];
+              ambientVertArray = [];
+              normalVertArray = [];
+
+              for (k = 0; k < 4; k++) {
+                cachedVertArray = vertArray[i + (k ^ (k >> 1))];
+                for (j = 0; j < 3; j++) {
+                  fillVertArray.push(cachedVertArray[j]);
+                  normalVertArray.push(cachedVertArray[j+13]);
+                }
+                for (j = 5; j < 9; j++) {
+                  colorVertArray.push(cachedVertArray[j]);
+                }
+                if (usingTexture) {
+                  texVertArray.push(cachedVertArray[3]);
+                  texVertArray.push(cachedVertArray[4]);
+                }
+                shininessVertArray.push(cachedVertArray[16]);
+                for (j = 0; j < 3; j++) {
+                  specularVertArray.push(cachedVertArray[17][j]);
+                  emissiveVertArray.push(cachedVertArray[18][j]);
+                  ambientVertArray.push(cachedVertArray[19][j]);
+                }
               }
-              for (j = 5; j < 9; j++) {
-                colorVertArray.push(vertArray[i][j]);
+              if (normalMode == PConstants.NORMAL_MODE_AUTO) {
+                calcTriangleNormal3D(fillVertArray, 0, 6, 3, normalVertArray, 0);
+                for (k = 3; k < 12; k++) {
+                  normalVertArray[k] = normalVertArray[k-3];
+                }
               }
 
-              for (j = 0; j < 3; j++) {
-                fillVertArray.push(vertArray[i+1][j]);
-              }
-              for (j = 5; j < 9; j++) {
-                colorVertArray.push(vertArray[i+1][j]);
-              }
-
-              for (j = 0; j < 3; j++) {
-                fillVertArray.push(vertArray[i+3][j]);
-              }
-              for (j = 5; j < 9; j++) {
-                colorVertArray.push(vertArray[i+3][j]);
-              }
-
-              for (j = 0; j < 3; j++) {
-                fillVertArray.push(vertArray[i+2][j]);
-              }
-              for (j = 5; j < 9; j++) {
-                colorVertArray.push(vertArray[i+2][j]);
-              }
-
-              if (usingTexture) {
-                texVertArray.push(vertArray[i+0][3]);
-                texVertArray.push(vertArray[i+0][4]);
-                texVertArray.push(vertArray[i+1][3]);
-                texVertArray.push(vertArray[i+1][4]);
-                texVertArray.push(vertArray[i+3][3]);
-                texVertArray.push(vertArray[i+3][4]);
-                texVertArray.push(vertArray[i+2][3]);
-                texVertArray.push(vertArray[i+2][4]);
-              }
-
-              fill3D(fillVertArray, "TRIANGLE_STRIP", colorVertArray, texVertArray);
+              fill3D(fillVertArray, "TRIANGLE_STRIP", colorVertArray, texVertArray, shininessVertArray, specularVertArray, emissiveVertArray, ambientVertArray, normalVertArray);
             }
           }
         } else if (curShape === PConstants.QUAD_STRIP) {
@@ -11959,7 +12114,7 @@
             }
 
             if (doFill || usingTexture) {
-              fill3D(fillVertArray, "TRIANGLE_LIST", colorVertArray, texVertArray);
+              fill3D(fillVertArray, "TRIANGLE_LIST", colorVertArray, texVertArray, shininessVertArray, specularVertArray, emissiveVertArray, ambientVertArray, normalVertArray);
             }
           }
         }
@@ -11992,7 +12147,7 @@
 
             // fill is ignored if textures are used
             if (doFill || usingTexture) {
-              fill3D(fillVertArray, "TRIANGLE_FAN", colorVertArray, texVertArray);
+              fill3D(fillVertArray, "TRIANGLE_FAN", colorVertArray, texVertArray, shininessVertArray, specularVertArray, emissiveVertArray, ambientVertArray, normalVertArray);
             }
           }
         }
@@ -13162,7 +13317,7 @@
           colorVertArray.push(vertArray[i][j]);
         }
       }
-      fill3D(fillVertArray, "TRIANGLE_FAN", colorVertArray);
+      fill3D(fillVertArray, "TRIANGLE_FAN", colorVertArray); // TODO, shininessVertArray, specularVertArray, emissiveVertArray, ambientVertArray
     };
 
     /**
