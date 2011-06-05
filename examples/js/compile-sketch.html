@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="../../processing.js"></script>
+  <link rel="stylesheet" href="../style.css"/></head>
+<body onload="recompute()"><h1><a href="http://processingjs.org/">Processing.js</a></h1>
+<h2>Compiling Processing sketch to JavaScript</h2>
+
+<p>Let's say we have the following sketch:</p>
+<p>
+<textarea id="sketch" cols="80" rows="10">background(0);
+String s = "Hello, world!";
+text(s,10,40);</textarea> <button onclick="recompute()">Recompute</button>
+</p>
+
+<p>Load this code as a string and call the <code>Processing.compile</code> method. The returned object is a Processing.Sketch object.</p>
+<pre>var sketch = Processing.compile(processingSketchCode);</pre>
+  
+<p>The sketch can be serialized as a JavaScript code via <code>sketch.toString()</code>:</p>
+<pre id="serializedSketch"></pre>
+
+<p>Or get the code as an "attach" function via <code>sketch.sourceCode</code>:</p>
+<pre id="attachFunction"></pre>
+
+<p>Either of the last code fragments/expressions can be used as a second parameter of the <code>Processing</code> constructor (directly or via an intermediate variable).
+<pre id="run"></pre>
+
+<p>The execution result:</p>
+<p>
+<canvas id="canvas"></canvas></p>
+
+<script>
+var lastRunInstance = null;
+
+function recompute() {
+  if(lastRunInstance) lastRunInstance.exit();
+  
+  var processingSketchCode = document.getElementById("sketch").value;
+  
+  var sketch = Processing.compile(processingSketchCode);
+  
+  document.getElementById("serializedSketch").textContent = sketch.toString();
+  
+  document.getElementById("attachFunction").textContent = sketch.sourceCode;
+  
+  document.getElementById("run").textContent = "new Processing(canvas, " + sketch.sourceCode + ");";
+  
+  var canvas = document.getElementById("canvas");
+  lastRunInstance = eval("new Processing(canvas, " + sketch.sourceCode + ")");
+}
+</script>
+
+
+</body></html>
