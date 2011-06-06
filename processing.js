@@ -1625,6 +1625,29 @@
     }
     return result;
   };
+  /**
+   * The __getClass() function returns the runtime class of an object.
+   *
+   * @param {Object} subject the object
+   *
+   * @return {Class} the runtime class
+   */
+  defaultScope.__getClass = function(subject) {
+    if (subject.getClass instanceof Function) {
+      return subject.getClass.apply(subject, removeFirstArgument(arguments));
+    }
+
+    return {
+      getMethod: function(name) {
+        var method = subject[name];
+        return {
+          invoke: function() {
+            return method.apply(subject, arguments);
+          }
+        };
+      }
+    };
+  };
 
   var colors = {
     aliceblue:            "#f0f8ff",
@@ -7982,6 +8005,7 @@
     };
 
     Drawing2D.prototype.redraw = function() {
+      invokeLibraryMethods("pre", []);
       DrawingShared.prototype.redraw.apply(this, arguments);
 
       curContext.lineWidth = lineWidth;
@@ -7989,12 +8013,15 @@
 
       saveContext();
       p.draw();
+      invokeLibraryMethods("draw", []);
       restoreContext();
 
       inDraw = false;
+      invokeLibraryMethods("post", []);
     };
 
     Drawing3D.prototype.redraw = function() {
+      invokeLibraryMethods("pre", []);
       DrawingShared.prototype.redraw.apply(this, arguments);
 
       inDraw = true;
@@ -8013,8 +8040,10 @@
       p.emissive(0, 0, 0);
       p.camera();
       p.draw();
+      invokeLibraryMethods("draw", []);
 
       inDraw = false;
+      invokeLibraryMethods("post", []);
     };
 
     /**
@@ -8117,6 +8146,7 @@
           }
         }
       }
+      invokeLibraryMethods("dispose", []);
 
       for (var i=0, ehl=eventHandlers.length; i<ehl; i++) {
         var elem = eventHandlers[i][0],
@@ -8218,6 +8248,52 @@
       // binds new lib code to the Processing.lib names-space and the current
       // p context. -F1LT3R
     };
+
+    var invokeLibraryMethods;
+    ((function() {
+      var libraryMethods = {
+        pre : [],
+        draw : [],
+        post : [],
+        mouseEvent : [],
+        keyEvent : [],
+        size : [],
+        stop: [],
+        dispose: []
+      };
+      function registerLibraryMethod(subject, name) {
+        var items = libraryMethods[name];
+        items.push(subject);
+      }
+      function unregisterLibraryMethod(subject, name) {
+        var items = libraryMethods[name];
+        var index = items.indexOf(subject);
+        if (index >= 0) {
+          items.splice(index, 1);
+        }
+      }
+      function addRegistrationFunction(name) {
+        var suffix = name.charAt(0).toUpperCase() + name.substring(1);
+        p["register" + suffix] = function(subject) {
+          registerLibraryMethod(subject, name);
+        };
+        p["unregister" + suffix] = function(subject) {
+          unregisterLibraryMethod(subject, name);
+        };
+      }
+      var name;
+      for(name in libraryMethods) {
+        if (libraryMethods.hasOwnProperty(name)) {
+          addRegistrationFunction(name);
+        }
+      }
+      invokeLibraryMethods = function(name, args) {
+        var items = libraryMethods[name], i;
+        for (i = 0; i < items.length; ++i) {
+          items[i][name].apply(items[i], args);
+        }
+      }
+    })());
 
     var contextMenu = function(e) {
       e.preventDefault();
@@ -9641,6 +9717,8 @@
 
       // Externalize the context
       p.externals.context = curContext;
+
+      invokeLibraryMethods("size", [aWidth, aHeight]);
 
       for (var i = 0; i < PConstants.SINCOS_LENGTH; i++) {
         sinLUT[i] = p.sin(i * (PConstants.PI / 180) * 0.5);
@@ -17715,7 +17793,7 @@
       }
       do {
         repeatJavaReplacement = false;
-        s = s.replace(/((?:'\d+'|\b[A-Za-z_$][\w$]*\s*(?:"[BC]\d+")*)\s*\.\s*(?:[A-Za-z_$][\w$]*\s*(?:"[BC]\d+"\s*)*\.\s*)*)(replace|replaceAll|replaceFirst|contains|equals|hashCode|toCharArray|printStackTrace|split)\s*"B(\d+)"/g,
+        s = s.replace(/((?:'\d+'|\b[A-Za-z_$][\w$]*\s*(?:"[BC]\d+")*)\s*\.\s*(?:[A-Za-z_$][\w$]*\s*(?:"[BC]\d+"\s*)*\.\s*)*)(replace|replaceAll|replaceFirst|contains|equals|hashCode|toCharArray|printStackTrace|split|getClass)\s*"B(\d+)"/g,
           replacePrototypeMethods);
       } while (repeatJavaReplacement);
       // xxx instanceof yyy -> __instanceof(xxx, yyy)
