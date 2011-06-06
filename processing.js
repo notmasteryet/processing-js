@@ -1323,6 +1323,309 @@
     return result;
   };
 
+  defaultScope.__int_cast = function(val) {
+    return 0|val;
+  };
+
+  defaultScope.__instanceof = function(obj, type) {
+    if (typeof type !== "function") {
+      throw "Function is expected as type argument for instanceof operator";
+    }
+
+    if (typeof obj === "string") {
+      // special case for strings
+      return type === Object || type === String;
+    }
+
+    if (obj instanceof type) {
+      // fast check if obj is already of type instance
+      return true;
+    }
+
+    if (typeof obj !== "object" || obj === null) {
+      return false; // not an object or null
+    }
+
+    var objType = obj.constructor;
+    if (type.$isInterface) {
+      // expecting the interface
+      // queueing interfaces from type and its base classes
+      var interfaces = [];
+      while (objType) {
+        if (objType.$interfaces) {
+          interfaces = interfaces.concat(objType.$interfaces);
+        }
+        objType = objType.$base;
+      }
+      while (interfaces.length > 0) {
+        var i = interfaces.shift();
+        if (i === type) {
+          return true;
+        }
+        // wide search in base interfaces
+        if (i.$interfaces) {
+          interfaces = interfaces.concat(i.$interfaces);
+        }
+      }
+      return false;
+    }
+
+    while (objType.hasOwnProperty("$base")) {
+      objType = objType.$base;
+      if (objType === type) {
+        return true; // object was found
+      }
+    }
+
+    return false;
+  };
+
+  defaultScope.PConstants = ((function(base) {
+    var constructor = function() {}
+    constructor.$isInterface = true;
+    constructor.prototype = base;
+    return new constructor();
+  })(PConstants));
+
+  ////////////////////////////////////////////////////////////////////////////
+  // Char handling
+  ////////////////////////////////////////////////////////////////////////////
+  var charMap = {};
+
+  var Char = function(chr) {
+    if (typeof chr === 'string' && chr.length === 1) {
+      this.code = chr.charCodeAt(0);
+    } else if (typeof chr === 'number') {
+      this.code = chr;
+    } else if (chr instanceof Char) {
+      this.code = chr;
+    } else {
+      this.code = NaN;
+    }
+
+    return (charMap[this.code] === undef) ? charMap[this.code] = this : charMap[this.code];
+  };
+
+  Char.prototype.toString = function() {
+    return String.fromCharCode(this.code);
+  };
+
+  Char.prototype.valueOf = function() {
+    return this.code;
+  };
+
+  defaultScope.Character = Char;
+
+  ////////////////////////////////////////////////////////////////////////////
+  // Object and String prototype extensions
+  ////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Removes the first argument from the arguments set -- shifts.
+   *
+   * @param {Arguments} args  The Arguments object.
+   *
+   * @return {Object[]}       Returns an array of arguments except first one.
+   *
+   * @see #match
+   */
+  function removeFirstArgument(args) {
+    return Array.prototype.slice.call(args, 1);
+  }
+
+  /**
+   * The returns hash code of the.
+   *
+   * @param {Object} subject The string
+   *
+   * @return {int} a hash code
+   */
+  defaultScope.__hashCode = function(subject) {
+    if (subject.hashCode instanceof Function) {
+      return subject.hashCode.apply(subject, removeFirstArgument(arguments));
+    }
+
+    return virtHashCode(subject);
+  };
+  /**
+   * The __printStackTrace() prints stack trace to the console.
+   *
+   * @param {Exception} subject The error
+   */
+  defaultScope.__printStackTrace = function(subject) {
+    ((new Function("msg", "Processing.logger.log(msg);"))("Exception: " + subject.toString()));
+  };
+
+  /**
+   * The contains(string) function returns true if the string passed in the parameter
+   * is a substring of this string. It returns false if the string passed
+   * in the parameter is not a substring of this string.
+   *
+   * @param {String} The string to look for in the current string
+   *
+   * @return {boolean} returns true if this string contains
+   * the string passed as parameter. returns false, otherwise.
+   *
+   */
+  defaultScope.__contains = function (subject, subStr) {
+    if (typeof subject !== "string") {
+      return subject.contains.apply(subject, removeFirstArgument(arguments));
+    }
+    //Parameter is not null AND
+    //The type of the parameter is the same as this object (string)
+    //The javascript function that finds a substring returns 0 or higher
+    return (
+      (subject !== null) &&
+      (subStr !== null) &&
+      (typeof subStr === "string") &&
+      (subject.indexOf(subStr) > -1)
+    );
+  };
+  /**
+   * The __replaceAll() function searches all matches between a substring (or regular expression) and a string,
+   * and replaces the matched substring with a new substring
+   *
+   * @param {String} subject    a substring
+   * @param {String} regex      a substring or a regular expression
+   * @param {String} replace    the string to replace the found value
+   *
+   * @return {String} returns result
+   *
+   * @see #match
+   */
+  defaultScope.__replaceAll = function(subject, regex, replacement) {
+    if (typeof subject !== "string") {
+      return subject.replaceAll.apply(subject, removeFirstArgument(arguments));
+    }
+
+    return subject.replace(new RegExp(regex, "g"), replacement);
+  };
+  /**
+   * The __replaceFirst() function searches first matche between a substring (or regular expression) and a string,
+   * and replaces the matched substring with a new substring
+   *
+   * @param {String} subject    a substring
+   * @param {String} regex      a substring or a regular expression
+   * @param {String} replace    the string to replace the found value
+   *
+   * @return {String} returns result
+   *
+   * @see #match
+   */
+  defaultScope.__replaceFirst = function(subject, regex, replacement) {
+    if (typeof subject !== "string") {
+      return subject.replaceFirst.apply(subject, removeFirstArgument(arguments));
+    }
+
+    return subject.replace(new RegExp(regex, ""), replacement);
+  };
+  /**
+   * The __replace() function searches all matches between a substring and a string,
+   * and replaces the matched substring with a new substring
+   *
+   * @param {String} subject         a substring
+   * @param {String} what         a substring to find
+   * @param {String} replacement    the string to replace the found value
+   *
+   * @return {String} returns result
+   */
+  defaultScope.__replace = function(subject, what, replacement) {
+    if (typeof subject !== "string") {
+      return subject.replace.apply(subject, removeFirstArgument(arguments));
+    }
+    if (what instanceof RegExp) {
+      return subject.replace(what, replacement);
+    }
+
+    if (typeof what !== "string") {
+      what = what.toString();
+    }
+    if (what === "") {
+      return subject;
+    }
+
+    var i = subject.indexOf(what);
+    if (i < 0) {
+      return subject;
+    }
+
+    var j = 0, result = "";
+    do {
+      result += subject.substring(j, i) + replacement;
+      j = i + what.length;
+    } while ( (i = subject.indexOf(what, j)) >= 0);
+    return result + subject.substring(j);
+  };
+  /**
+   * The __equals() function compares two strings (or objects) to see if they are the same.
+   * This method is necessary because it's not possible to compare strings using the equality operator (==).
+   * Returns true if the strings are the same and false if they are not.
+   *
+   * @param {String} subject  a string used for comparison
+   * @param {String} other  a string used for comparison with
+   *
+   * @return {boolean} true is the strings are the same false otherwise
+   */
+  defaultScope.__equals = function(subject, other) {
+    if (subject.equals instanceof Function) {
+      return subject.equals.apply(subject, removeFirstArgument(arguments));
+    }
+
+    return virtEquals(subject, other);
+  };
+  /**
+   * The __toCharArray() function splits the string into a char array.
+   *
+   * @param {String} subject The string
+   *
+   * @return {Char[]} a char array
+   */
+  defaultScope.__toCharArray = function(subject) {
+    if (typeof subject !== "string") {
+      return subject.toCharArray.apply(subject, removeFirstArgument(arguments));
+    }
+
+    var chars = [];
+    for (var i = 0, len = subject.length; i < len; ++i) {
+      chars[i] = new Char(subject.charAt(i));
+    }
+    return chars;
+  };
+  /**
+   * The __split() function splits a string using the regex delimiter
+   * specified. If limit is specified, the resultant array will have number
+   * of elements equal to or less than the limit.
+   *
+   * @param {String} subject string to be split
+   * @param {String} regexp  regex string used to split the subject
+   * @param {int}    limit   max number of tokens to be returned
+   *
+   * @return {String[]} an array of tokens from the split string
+   */
+  defaultScope.__split = function(subject, regex, limit) {
+    var pattern = new RegExp(regex);
+
+    // If limit is not specified, use JavaScript's built-in String.split.
+    if ((limit === undef) || (limit < 1)) {
+      return subject.split(pattern);
+    }
+
+    // If limit is specified, JavaScript's built-in String.split has a
+    // different behaviour than Java's. A Java-compatible implementation is
+    // provided here.
+    var result = [], currSubject = subject, pos;
+    while (((pos = currSubject.search(pattern)) !== -1)
+        && (result.length < (limit - 1))) {
+      var match = pattern.exec(currSubject).toString();
+      result.push(currSubject.substring(0, pos));
+      currSubject = currSubject.substring(pos + match.length);
+    }
+    if ((pos !== -1) || (currSubject !== "")) {
+      result.push(currSubject);
+    }
+    return result;
+  };
+
   var colors = {
     aliceblue:            "#f0f8ff",
     antiquewhite:         "#faebd7",
@@ -2344,33 +2647,6 @@
     // A no-op function for when the user calls 3D functions from a 2D sketch
     // We can change this to a throw or console.error() later if we want
     DrawingShared.prototype.a3DOnlyFunction = function(){};
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Char handling
-    ////////////////////////////////////////////////////////////////////////////
-    var charMap = {};
-
-    var Char = p.Character = function(chr) {
-      if (typeof chr === 'string' && chr.length === 1) {
-        this.code = chr.charCodeAt(0);
-      } else if (typeof chr === 'number') {
-        this.code = chr;
-      } else if (chr instanceof Char) {
-        this.code = chr;
-      } else {
-        this.code = NaN;
-      }
-
-      return (charMap[this.code] === undef) ? charMap[this.code] = this : charMap[this.code];
-    };
-
-    Char.prototype.toString = function() {
-      return String.fromCharCode(this.code);
-    };
-
-    Char.prototype.valueOf = function() {
-      return this.code;
-    };
 
     /**
      * Datatype for storing shapes. Processing can currently load and display SVG (Scalable Vector Graphics) shapes.
@@ -8362,19 +8638,6 @@
       return ret;
     };
 
-    /**
-     * Removes the first argument from the arguments set -- shifts.
-     *
-     * @param {Arguments} args  The Arguments object.
-     *
-     * @return {Object[]}       Returns an array of arguments except first one.
-     *
-     * @see #match
-     */
-    function removeFirstArgument(args) {
-      return Array.prototype.slice.call(args, 1);
-    }
-
     ////////////////////////////////////////////////////////////////////////////
     // String Functions
     ////////////////////////////////////////////////////////////////////////////
@@ -8402,176 +8665,6 @@
       return results.length > 0 ? results : null;
     };
     /**
-     * The contains(string) function returns true if the string passed in the parameter
-     * is a substring of this string. It returns false if the string passed
-     * in the parameter is not a substring of this string.
-     *
-     * @param {String} The string to look for in the current string
-     *
-     * @return {boolean} returns true if this string contains
-     * the string passed as parameter. returns false, otherwise.
-     *
-     */
-    p.__contains = function (subject, subStr) {
-      if (typeof subject !== "string") {
-        return subject.contains.apply(subject, removeFirstArgument(arguments));
-      }
-      //Parameter is not null AND
-      //The type of the parameter is the same as this object (string)
-      //The javascript function that finds a substring returns 0 or higher
-      return (
-        (subject !== null) &&
-        (subStr !== null) &&
-        (typeof subStr === "string") &&
-        (subject.indexOf(subStr) > -1)
-      );
-    };
-    /**
-     * The __replaceAll() function searches all matches between a substring (or regular expression) and a string,
-     * and replaces the matched substring with a new substring
-     *
-     * @param {String} subject    a substring
-     * @param {String} regex      a substring or a regular expression
-     * @param {String} replace    the string to replace the found value
-     *
-     * @return {String} returns result
-     *
-     * @see #match
-     */
-    p.__replaceAll = function(subject, regex, replacement) {
-      if (typeof subject !== "string") {
-        return subject.replaceAll.apply(subject, removeFirstArgument(arguments));
-      }
-
-      return subject.replace(new RegExp(regex, "g"), replacement);
-    };
-    /**
-     * The __replaceFirst() function searches first matche between a substring (or regular expression) and a string,
-     * and replaces the matched substring with a new substring
-     *
-     * @param {String} subject    a substring
-     * @param {String} regex      a substring or a regular expression
-     * @param {String} replace    the string to replace the found value
-     *
-     * @return {String} returns result
-     *
-     * @see #match
-     */
-    p.__replaceFirst = function(subject, regex, replacement) {
-      if (typeof subject !== "string") {
-        return subject.replaceFirst.apply(subject, removeFirstArgument(arguments));
-      }
-
-      return subject.replace(new RegExp(regex, ""), replacement);
-    };
-    /**
-     * The __replace() function searches all matches between a substring and a string,
-     * and replaces the matched substring with a new substring
-     *
-     * @param {String} subject         a substring
-     * @param {String} what         a substring to find
-     * @param {String} replacement    the string to replace the found value
-     *
-     * @return {String} returns result
-     */
-    p.__replace = function(subject, what, replacement) {
-      if (typeof subject !== "string") {
-        return subject.replace.apply(subject, removeFirstArgument(arguments));
-      }
-      if (what instanceof RegExp) {
-        return subject.replace(what, replacement);
-      }
-
-      if (typeof what !== "string") {
-        what = what.toString();
-      }
-      if (what === "") {
-        return subject;
-      }
-
-      var i = subject.indexOf(what);
-      if (i < 0) {
-        return subject;
-      }
-
-      var j = 0, result = "";
-      do {
-        result += subject.substring(j, i) + replacement;
-        j = i + what.length;
-      } while ( (i = subject.indexOf(what, j)) >= 0);
-      return result + subject.substring(j);
-    };
-    /**
-     * The __equals() function compares two strings (or objects) to see if they are the same.
-     * This method is necessary because it's not possible to compare strings using the equality operator (==).
-     * Returns true if the strings are the same and false if they are not.
-     *
-     * @param {String} subject  a string used for comparison
-     * @param {String} other  a string used for comparison with
-     *
-     * @return {boolean} true is the strings are the same false otherwise
-     */
-    p.__equals = function(subject, other) {
-      if (subject.equals instanceof Function) {
-        return subject.equals.apply(subject, removeFirstArgument(arguments));
-      }
-
-      // TODO use virtEquals for HashMap here
-      return subject.valueOf() === other.valueOf();
-    };
-    /**
-     * The __toCharArray() function splits the string into a char array.
-     *
-     * @param {String} subject The string
-     *
-     * @return {Char[]} a char array
-     */
-    p.__toCharArray = function(subject) {
-      if (typeof subject !== "string") {
-        return subject.toCharArray.apply(subject, removeFirstArgument(arguments));
-      }
-
-      var chars = [];
-      for (var i = 0, len = subject.length; i < len; ++i) {
-        chars[i] = new Char(subject.charAt(i));
-      }
-      return chars;
-    };
-    /**
-     * The __split() function splits a string using the regex delimiter
-     * specified. If limit is specified, the resultant array will have number
-     * of elements equal to or less than the limit.
-     *
-     * @param {String} subject string to be split
-     * @param {String} regexp  regex string used to split the subject
-     * @param {int}    limit   max number of tokens to be returned
-     *
-     * @return {String[]} an array of tokens from the split string
-     */
-    p.__split = function(subject, regex, limit) {
-      var pattern = new RegExp(regex);
-
-      // If limit is not specified, use JavaScript's built-in String.split.
-      if ((limit === undef) || (limit < 1)) {
-        return subject.split(pattern);
-      }
-
-      // If limit is specified, JavaScript's built-in String.split has a
-      // different behaviour than Java's. A Java-compatible implementation is
-      // provided here.
-      var result = [], currSubject = subject, pos;
-      while (((pos = currSubject.search(pattern)) !== -1)
-          && (result.length < (limit - 1))) {
-        var match = pattern.exec(currSubject).toString();
-        result.push(currSubject.substring(0, pos));
-        currSubject = currSubject.substring(pos + match.length);
-      }
-      if ((pos !== -1) || (currSubject !== "")) {
-        result.push(currSubject);
-      }
-      return result;
-    };
-    /**
      * The match() function matches a string with a regular expression, and returns the match as an
      * array. The first index is the matching expression, and array elements
      * [1] and higher represent each of the groups (sequences found in parens).
@@ -8583,34 +8676,6 @@
      */
     p.match = function(str, regexp) {
       return str.match(regexp);
-    };
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Other java specific functions
-    ////////////////////////////////////////////////////////////////////////////
-
-    /**
-     * The returns hash code of the.
-     *
-     * @param {Object} subject The string
-     *
-     * @return {int} a hash code
-     */
-    p.__hashCode = function(subject) {
-      if (subject.hashCode instanceof Function) {
-        return subject.hashCode.apply(subject, removeFirstArgument(arguments));
-      }
-
-      // TODO use virtHashCode for HashMap here
-      return 0 | subject;
-    };
-    /**
-     * The __printStackTrace() prints stack trace to the console.
-     *
-     * @param {Exception} subject The error
-     */
-    p.__printStackTrace = function(subject) {
-      p.println("Exception: " + subject.toString() );
     };
 
     var logBuffer = [];
@@ -8838,63 +8903,6 @@
       } else {
         return intScalar(val, radix);
       }
-    };
-
-    p.__int_cast = function(val) {
-      return 0|val;
-    };
-
-    p.__instanceof = function(obj, type) {
-      if (typeof type !== "function") {
-        throw "Function is expected as type argument for instanceof operator";
-      }
-
-      if (typeof obj === "string") {
-        // special case for strings
-        return type === Object || type === String;
-      }
-
-      if (obj instanceof type) {
-        // fast check if obj is already of type instance
-        return true;
-      }
-
-      if (typeof obj !== "object" || obj === null) {
-        return false; // not an object or null
-      }
-
-      var objType = obj.constructor;
-      if (type.$isInterface) {
-        // expecting the interface
-        // queueing interfaces from type and its base classes
-        var interfaces = [];
-        while (objType) {
-          if (objType.$interfaces) {
-            interfaces = interfaces.concat(objType.$interfaces);
-          }
-          objType = objType.$base;
-        }
-        while (interfaces.length > 0) {
-          var i = interfaces.shift();
-          if (i === type) {
-            return true;
-          }
-          // wide search in base interfaces
-          if (i.$interfaces) {
-            interfaces = interfaces.concat(i.$interfaces);
-          }
-        }
-        return false;
-      }
-
-      while (objType.hasOwnProperty("$base")) {
-        objType = objType.$base;
-        if (objType === type) {
-          return true; // object was found
-        }
-      }
-
-      return false;
     };
 
     ////////////////////////////////////////////////////////////////////////////
@@ -17299,7 +17307,7 @@
       "beginDraw", "beginShape", "bezier", "bezierDetail", "bezierPoint",
       "bezierTangent", "bezierVertex", "binary", "blend", "blendColor",
       "blit_resize", "blue", "box", "breakShape", "brightness",
-      "camera", "ceil", "Character", "color", "colorMode",
+      "camera", "ceil", "color", "colorMode",
       "concat", "console", "constrain", "copy", "cos", "createFont",
       "createGraphics", "createImage", "cursor", "curve", "curveDetail",
       "curvePoint", "curveTangent", "curveTightness", "curveVertex", "day",
@@ -17338,10 +17346,8 @@
       "textMode", "textSize", "texture", "textureMode", "textWidth", "tint",
       "touchCancel", "touchEnd", "touchMove", "touchStart", "translate",
       "triangle", "trim", "unbinary", "unhex", "updatePixels", "use3DContext",
-      "vertex", "width", "XMLElement", "year", "__contains", "__equals", "__frameRate",
-      "__hashCode", "__int_cast", "__instanceof", "__keyPressed", "__mousePressed",
-      "__printStackTrace", "__replace", "__replaceAll", "__replaceFirst",
-      "__toCharArray", "__split"];
+      "vertex", "width", "XMLElement", "year",  "__frameRate",
+      "__keyPressed", "__mousePressed"];
 
     var members = {};
     var i, l;
@@ -17385,9 +17391,7 @@
 
 */
 
-  function parseProcessing(code) {
-    var globalMembers = getGlobalMembers();
-
+  function parseProcessing(code, globalMembers) {
     // masks parentheses, brackets and braces with '"A5"'
     // where A is the bracket type, and 5 is the index in an array containing all brackets split into atoms
     // 'while(true){}' -> 'while"B1""A2"'
@@ -18939,9 +18943,14 @@
   Processing.compile = function(pdeCode) {
     var sketch = new Processing.Sketch();
     var code = preprocessCode(pdeCode, sketch);
-    var compiledPde = parseProcessing(code);
+    var compiledPde = parseProcessing(code, getGlobalMembers());
     sketch.sourceCode = compiledPde;
     return sketch;
+  };
+
+  // Parses/compiles Java-like syntax to Javascript
+  Processing.compileLibrary = function(code) {
+    return "(" + parseProcessing(code, {}) + "(Processing.prototype));";
   };
 //#endif
 
