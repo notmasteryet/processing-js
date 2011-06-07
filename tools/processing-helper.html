@@ -15,6 +15,7 @@
     <textarea rows="20" cols="80" id="code"></textarea>
     <br>  <input onclick="helper.runSketch();" type="button" value="Run"></input>
     &nbsp;<input onclick="helper.convertToJS();" type="button" value="Convert to JS"></input>
+    &nbsp;<input onclick="helper.convertLibToJS();" type="button" value="Convert Library to JS"></input>
     &nbsp;<input onclick="helper.generateDataURI();" type="button" value="Generate Data URI"></input>
     &nbsp;<input onclick="helper.generateRefTest();" type="button" value="Generate Ref Test"></input>
 
@@ -46,6 +47,16 @@
           try {
             this.output.value = js_beautify(
                                   Processing.compile(this.code.value).sourceCode).replace(/\n\n\n+/g, '\n\n');
+            this.output.select();
+          } catch (e) {
+            this.output.value = "Parser Error! Error was:\n" + e.toString();
+          }
+        },
+
+        convertLibToJS: function() {
+          try {
+            this.output.value = js_beautify(
+                                  Processing.compileLibrary(this.code.value)).replace(/\n\n\n+/g, '\n\n');
             this.output.select();
           } catch (e) {
             this.output.value = "Parser Error! Error was:\n" + e.toString();

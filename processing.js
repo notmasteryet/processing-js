@@ -1380,12 +1380,12 @@
     return false;
   };
 
-  defaultScope.PConstants = ((function(base) {
-    var constructor = function() {}
-    constructor.$isInterface = true;
-    constructor.prototype = base;
-    return new constructor();
-  })(PConstants));
+  defaultScope.PConstants = (function(base) {
+    function Constr() {}
+    Constr.$isInterface = true;
+    Constr.prototype = base;
+    return new Constr();
+  }(PConstants));
 
   ////////////////////////////////////////////////////////////////////////////
   // Char handling
@@ -1995,6 +1995,8 @@
         isContextReplaced = false,
         setPixelsCached,
         maxPixelsCached = 1000,
+        invokeLibraryMethods,
+        pressedButtonsMap = [],
         pressedKeysMap = [],
         lastPressedKeyCode = null,
         codedKeys = [ PConstants.SHIFT, PConstants.CONTROL, PConstants.ALT, PConstants.CAPSLK, PConstants.PGUP, PConstants.PGDN,
@@ -8069,6 +8071,7 @@
       doLoop = false;
       loopStarted = false;
       clearInterval(looping);
+      invokeLibraryMethods("stop");
     };
 
     /**
@@ -8249,8 +8252,7 @@
       // p context. -F1LT3R
     };
 
-    var invokeLibraryMethods;
-    ((function() {
+    (function() {
       var libraryMethods = {
         pre : [],
         draw : [],
@@ -8292,8 +8294,8 @@
         for (i = 0; i < items.length; ++i) {
           items[i][name].apply(items[i], args);
         }
-      }
-    })());
+      };
+    }());
 
     var contextMenu = function(e) {
       e.preventDefault();
@@ -16900,8 +16902,344 @@
     }
 
     //////////////////////////////////////////////////////////////////////////
+    // Java events handling
+    //////////////////////////////////////////////////////////////////////////
+
+    function InputEvent() {
+      this.when = new Date().valueOf();
+    }
+    InputEvent.prototype.getID = function() {
+      return this.id;
+    };
+    InputEvent.prototype.getSource = function() {
+      return this.source;
+    };
+    InputEvent.prototype.consume = function() {
+      this.consumed = true;
+    };
+    InputEvent.prototype.getModifiers = function() {
+      return this.modifiers & 0x3F;
+    };
+    InputEvent.prototype.getModifiersEx = function() {
+      return this.modifiers;
+    };
+    InputEvent.prototype.isAltDown = function() {
+      return (this.modifiers & InputEvent.ALT_DOWN_MASK) !== 0;
+    };
+    InputEvent.prototype.isAltGraphDown = function() {
+      return (this.modifiers & InputEvent.ALT_GRAPH_DOWN_MASK) !== 0;
+    };
+    InputEvent.prototype.isConsumed = function() {
+      return !!this.consumed;
+    };
+    InputEvent.prototype.isControlDown = function() {
+      return (this.modifiers & InputEvent.CTRL_DOWN_MASK) !== 0;
+    };
+    InputEvent.prototype.isMetaDown = function() {
+      return (this.modifiers & InputEvent.META_DOWN_MASK) !== 0;
+    };
+    InputEvent.prototype.isShiftDown = function() {
+      return (this.modifiers & InputEvent.SHIFT_DOWN_MASK) !== 0;
+    };
+    InputEvent.ALT_DOWN_MASK = 512;
+    InputEvent.ALT_GRAPH_DOWN_MASK = 8192;
+    InputEvent.ALT_GRAPH_MASK = 32;
+    InputEvent.ALT_MASK = 8;
+    InputEvent.BUTTON1_DOWN_MASK = 1024;
+    InputEvent.BUTTON1_MASK = 16;
+    InputEvent.BUTTON2_DOWN_MASK = 2048;
+    InputEvent.BUTTON2_MASK = 8;
+    InputEvent.BUTTON3_DOWN_MASK = 4096;
+    InputEvent.BUTTON3_MASK = 4;
+    InputEvent.CTRL_DOWN_MASK = 128;
+    InputEvent.CTRL_MASK = 2;
+    InputEvent.META_DOWN_MASK = 256;
+    InputEvent.META_MASK = 4;
+    InputEvent.SHIFT_DOWN_MASK = 64;
+    InputEvent.SHIFT_MASK = 1;
+
+    function MouseEvent() {
+    }
+    MouseEvent.prototype = new InputEvent();
+    MouseEvent.prototype.getButton = function() {
+      return this.button;
+    };
+    MouseEvent.prototype.getClickCount = function() {
+      return this.clickCount;
+    };
+    MouseEvent.prototype.getX = function() {
+      return this.x;
+    };
+    MouseEvent.prototype.getY = function() {
+      return this.y;
+    };
+    MouseEvent.BUTTON1 = 1;
+    MouseEvent.BUTTON2 = 2;
+    MouseEvent.BUTTON3 = 3;
+    MouseEvent.MOUSE_FIRST = 500;
+    MouseEvent.MOUSE_CLICKED = 500;
+    MouseEvent.MOUSE_PRESSED = 501;
+    MouseEvent.MOUSE_RELEASED = 502;
+    MouseEvent.MOUSE_MOVED = 503;
+    MouseEvent.MOUSE_ENTERED = 504;
+    MouseEvent.MOUSE_EXITED = 505;
+    MouseEvent.MOUSE_WHEEL = 507;
+    MouseEvent.MOUSE_DRAGGED = 506;
+    MouseEvent.MOUSE_LAST = 507;
+    MouseEvent.NOBUTTON = 0;
+
+    function KeyEvent() {
+    }
+    KeyEvent.prototype = new InputEvent();
+    KeyEvent.prototype.getKeyChar = function() {
+      return this.keyChar;
+    };
+    KeyEvent.prototype.getKeyCode = function() {
+      return this.keyCode;
+    };
+    KeyEvent.prototype.getKeyLocation = function() {
+      return KeyEvent.KEY_LOCATION_STANDARD;
+    };
+    KeyEvent.prototype.setKeyChar = function(keyChar) {
+      this.keyChar = keyChar;
+    };
+    KeyEvent.prototype.getKeyCode = function(keyCode) {
+      this.keyCode = keyCode;
+    };
+    KeyEvent.CHAR_UNDEFINED = new Char(65535);
+    KeyEvent.KEY_FIRST = 400;
+    KeyEvent.KEY_LAST = 402;
+    KeyEvent.KEY_LOCATION_LEFT = 2;
+    KeyEvent.KEY_LOCATION_NUMPAD = 4;
+    KeyEvent.KEY_LOCATION_RIGHT = 3;
+    KeyEvent.KEY_LOCATION_STANDARD = 1;
+    KeyEvent.KEY_LOCATION_UNKNOWN = 0;
+    KeyEvent.KEY_PRESSED = 401;
+    KeyEvent.KEY_RELEASED = 402;
+    KeyEvent.KEY_TYPED = 400;
+    KeyEvent.VK_0 = 48;
+    KeyEvent.VK_1 = 49;
+    KeyEvent.VK_2 = 50;
+    KeyEvent.VK_3 = 51;
+    KeyEvent.VK_4 = 52;
+    KeyEvent.VK_5 = 53;
+    KeyEvent.VK_6 = 54;
+    KeyEvent.VK_7 = 55;
+    KeyEvent.VK_8 = 56;
+    KeyEvent.VK_9 = 57;
+    KeyEvent.VK_A = 65;
+    KeyEvent.VK_ACCEPT = 30;
+    KeyEvent.VK_ADD = 107;
+    KeyEvent.VK_AGAIN = 65481;
+    KeyEvent.VK_ALL_CANDIDATES = 256;
+    KeyEvent.VK_ALPHANUMERIC = 240;
+    KeyEvent.VK_ALT = 18;
+    KeyEvent.VK_ALT_GRAPH = 65406;
+    KeyEvent.VK_AMPERSAND = 150;
+    KeyEvent.VK_ASTERISK = 151;
+    KeyEvent.VK_AT = 512;
+    KeyEvent.VK_B = 66;
+    KeyEvent.VK_BACK_QUOTE = 192;
+    KeyEvent.VK_BACK_SLASH = 92;
+    KeyEvent.VK_BACK_SPACE = 8;
+    KeyEvent.VK_BRACELEFT = 161;
+    KeyEvent.VK_BRACERIGHT = 162;
+    KeyEvent.VK_C = 67;
+    KeyEvent.VK_CANCEL = 3;
+    KeyEvent.VK_CAPS_LOCK = 20;
+    KeyEvent.VK_CIRCUMFLEX = 514;
+    KeyEvent.VK_CLEAR = 12;
+    KeyEvent.VK_CLOSE_BRACKET = 93;
+    KeyEvent.VK_CODE_INPUT = 258;
+    KeyEvent.VK_COLON = 513;
+    KeyEvent.VK_COMMA = 44;
+    KeyEvent.VK_COMPOSE = 65312;
+    KeyEvent.VK_CONTROL = 17;
+    KeyEvent.VK_CONVERT = 28;
+    KeyEvent.VK_COPY = 65485;
+    KeyEvent.VK_CUT = 65489;
+    KeyEvent.VK_D = 68;
+    KeyEvent.VK_DEAD_ABOVEDOT = 134;
+    KeyEvent.VK_DEAD_ABOVERING = 136;
+    KeyEvent.VK_DEAD_ACUTE = 129;
+    KeyEvent.VK_DEAD_BREVE = 133;
+    KeyEvent.VK_DEAD_CARON = 138;
+    KeyEvent.VK_DEAD_CEDILLA = 139;
+    KeyEvent.VK_DEAD_CIRCUMFLEX = 130;
+    KeyEvent.VK_DEAD_DIAERESIS = 135;
+    KeyEvent.VK_DEAD_DOUBLEACUTE = 137;
+    KeyEvent.VK_DEAD_GRAVE = 128;
+    KeyEvent.VK_DEAD_IOTA = 141;
+    KeyEvent.VK_DEAD_MACRON = 132;
+    KeyEvent.VK_DEAD_OGONEK = 140;
+    KeyEvent.VK_DEAD_SEMIVOICED_SOUND = 143;
+    KeyEvent.VK_DEAD_TILDE = 131;
+    KeyEvent.VK_DEAD_VOICED_SOUND = 142;
+    KeyEvent.VK_DECIMAL = 110;
+    KeyEvent.VK_DELETE = 127;
+    KeyEvent.VK_DIVIDE = 111;
+    KeyEvent.VK_DOLLAR = 515;
+    KeyEvent.VK_DOWN = 40;
+    KeyEvent.VK_E = 69;
+    KeyEvent.VK_END = 35;
+    KeyEvent.VK_ENTER = 10;
+    KeyEvent.VK_EQUALS = 61;
+    KeyEvent.VK_ESCAPE = 27;
+    KeyEvent.VK_EURO_SIGN = 516;
+    KeyEvent.VK_EXCLAMATION_MARK = 517;
+    KeyEvent.VK_F = 70;
+    KeyEvent.VK_F1 = 112;
+    KeyEvent.VK_F10 = 121;
+    KeyEvent.VK_F11 = 122;
+    KeyEvent.VK_F12 = 123;
+    KeyEvent.VK_F13 = 61440;
+    KeyEvent.VK_F14 = 61441;
+    KeyEvent.VK_F15 = 61442;
+    KeyEvent.VK_F16 = 61443;
+    KeyEvent.VK_F17 = 61444;
+    KeyEvent.VK_F18 = 61445;
+    KeyEvent.VK_F19 = 61446;
+    KeyEvent.VK_F2 = 113;
+    KeyEvent.VK_F20 = 61447;
+    KeyEvent.VK_F21 = 61448;
+    KeyEvent.VK_F22 = 61449;
+    KeyEvent.VK_F23 = 61450;
+    KeyEvent.VK_F24 = 61451;
+    KeyEvent.VK_F3 = 114;
+    KeyEvent.VK_F4 = 115;
+    KeyEvent.VK_F5 = 116;
+    KeyEvent.VK_F6 = 117;
+    KeyEvent.VK_F7 = 118;
+    KeyEvent.VK_F8 = 119;
+    KeyEvent.VK_F9 = 120;
+    KeyEvent.VK_FINAL = 24;
+    KeyEvent.VK_FIND = 65488;
+    KeyEvent.VK_FULL_WIDTH = 243;
+    KeyEvent.VK_G = 71;
+    KeyEvent.VK_GREATER = 160;
+    KeyEvent.VK_H = 72;
+    KeyEvent.VK_HALF_WIDTH = 244;
+    KeyEvent.VK_HELP = 156;
+    KeyEvent.VK_HIRAGANA = 242;
+    KeyEvent.VK_HOME = 36;
+    KeyEvent.VK_I = 73;
+    KeyEvent.VK_INPUT_METHOD_ON_OFF = 263;
+    KeyEvent.VK_INSERT = 155;
+    KeyEvent.VK_INVERTED_EXCLAMATION_MARK = 518;
+    KeyEvent.VK_J = 74;
+    KeyEvent.VK_JAPANESE_HIRAGANA = 260;
+    KeyEvent.VK_JAPANESE_KATAKANA = 259;
+    KeyEvent.VK_JAPANESE_ROMAN = 261;
+    KeyEvent.VK_K = 75;
+    KeyEvent.VK_KANA = 21;
+    KeyEvent.VK_KANA_LOCK = 262;
+    KeyEvent.VK_KANJI = 25;
+    KeyEvent.VK_KATAKANA = 241;
+    KeyEvent.VK_KP_DOWN = 225;
+    KeyEvent.VK_KP_LEFT = 226;
+    KeyEvent.VK_KP_RIGHT = 227;
+    KeyEvent.VK_KP_UP = 224;
+    KeyEvent.VK_L = 76;
+    KeyEvent.VK_LEFT = 37;
+    KeyEvent.VK_LEFT_PARENTHESIS = 519;
+    KeyEvent.VK_LESS = 153;
+    KeyEvent.VK_M = 77;
+    KeyEvent.VK_META = 157;
+    KeyEvent.VK_MINUS = 45;
+    KeyEvent.VK_MODECHANGE = 31;
+    KeyEvent.VK_MULTIPLY = 106;
+    KeyEvent.VK_N = 78;
+    KeyEvent.VK_NONCONVERT = 29;
+    KeyEvent.VK_NUM_LOCK = 144;
+    KeyEvent.VK_NUMBER_SIGN = 520;
+    KeyEvent.VK_NUMPAD0 = 96;
+    KeyEvent.VK_NUMPAD1 = 97;
+    KeyEvent.VK_NUMPAD2 = 98;
+    KeyEvent.VK_NUMPAD3 = 99;
+    KeyEvent.VK_NUMPAD4 = 100;
+    KeyEvent.VK_NUMPAD5 = 101;
+    KeyEvent.VK_NUMPAD6 = 102;
+    KeyEvent.VK_NUMPAD7 = 103;
+    KeyEvent.VK_NUMPAD8 = 104;
+    KeyEvent.VK_NUMPAD9 = 105;
+    KeyEvent.VK_O = 79;
+    KeyEvent.VK_OPEN_BRACKET = 91;
+    KeyEvent.VK_P = 80;
+    KeyEvent.VK_PAGE_DOWN = 34;
+    KeyEvent.VK_PAGE_UP = 33;
+    KeyEvent.VK_PASTE = 65487;
+    KeyEvent.VK_PAUSE = 19;
+    KeyEvent.VK_PERIOD = 46;
+    KeyEvent.VK_PLUS = 521;
+    KeyEvent.VK_PREVIOUS_CANDIDATE = 257;
+    KeyEvent.VK_PRINTSCREEN = 154;
+    KeyEvent.VK_PROPS = 65482;
+    KeyEvent.VK_Q = 81;
+    KeyEvent.VK_QUOTE = 222;
+    KeyEvent.VK_QUOTEDBL = 152;
+    KeyEvent.VK_R = 82;
+    KeyEvent.VK_RIGHT = 39;
+    KeyEvent.VK_RIGHT_PARENTHESIS = 522;
+    KeyEvent.VK_ROMAN_CHARACTERS = 245;
+    KeyEvent.VK_S = 83;
+    KeyEvent.VK_SCROLL_LOCK = 145;
+    KeyEvent.VK_SEMICOLON = 59;
+    KeyEvent.VK_SEPARATER = 108;
+    KeyEvent.VK_SEPARATOR = 108;
+    KeyEvent.VK_SHIFT = 16;
+    KeyEvent.VK_SLASH = 47;
+    KeyEvent.VK_SPACE = 32;
+    KeyEvent.VK_STOP = 65480;
+    KeyEvent.VK_SUBTRACT = 109;
+    KeyEvent.VK_T = 84;
+    KeyEvent.VK_TAB = 9;
+    KeyEvent.VK_U = 85;
+    KeyEvent.VK_UNDEFINED = 0;
+    KeyEvent.VK_UNDERSCORE = 523;
+    KeyEvent.VK_UNDO = 65483;
+    KeyEvent.VK_UP = 38;
+    KeyEvent.VK_V = 86;
+    KeyEvent.VK_W = 87;
+    KeyEvent.VK_X = 88;
+    KeyEvent.VK_Y = 89;
+    KeyEvent.VK_Z = 90;
+
+    (function() {
+      var i;
+      for (i in InputEvent) {
+        if (InputEvent.hasOwnProperty(i)) {
+          MouseEvent[i] = KeyEvent[i] = InputEvent[i];
+        }
+      }
+    }());
+
+    function buildModifiers() {
+      return (
+        (pressedKeysMap[KeyEvent.VK_SHIFT] !== undef ? (InputEvent.SHIFT_MASK | InputEvent.SHIFT_DOWN_MASK) : 0) |
+        (pressedKeysMap[KeyEvent.VK_CONTROL] !== undef ? (InputEvent.CTRL_MASK | InputEvent.CTRL_DOWN_MASK) : 0) |
+        (pressedKeysMap[KeyEvent.VK_ALT] !== undef ? (InputEvent.ALT_MASK | InputEvent.ALT_DOWN_MASK) : 0) |
+        (pressedKeysMap[KeyEvent.VK_ALT_GRAPH] !== undef ? (InputEvent.ALT_GRAPH_MASK | InputEvent.ALT_GRAPH_DOWN_MASK) : 0) |
+        (pressedKeysMap[KeyEvent.VK_META] !== undef ? (InputEvent.META_MASK | InputEvent.META_DOWN_MASK) : 0) |
+        (pressedButtonsMap[MouseEvent.BUTTON1] !== undef ? (InputEvent.BUTTON1_MASK | InputEvent.BUTTON1_DOWN_MASK) : 0) |
+        (pressedButtonsMap[MouseEvent.BUTTON2] !== undef ? (InputEvent.BUTTON2_MASK | InputEvent.BUTTON2_DOWN_MASK) : 0) |
+        (pressedButtonsMap[MouseEvent.BUTTON3] !== undef ? (InputEvent.BUTTON3_MASK | InputEvent.BUTTON3_DOWN_MASK) : 0));
+    }
+
+    //////////////////////////////////////////////////////////////////////////
     // Touch event handling
     //////////////////////////////////////////////////////////////////////////
+
+    function dispatchMouseEvent(id, button, clickCount) {
+      var event = new MouseEvent();
+      event.source = p;
+      event.id = id;
+      event.modifiers = buildModifiers();
+      event.x = p.mousex;
+      event.y = p.mousey;
+      event.clickCount = clickCount || 0;
+      event.button = button || MouseEvent.NOBUTTON;
+      invokeLibraryMethods("mouseEvent", [event]);
+    }
 
     attach(curElement, "touchstart", function (t) {
       // Removes unwanted behaviour of the canvas when touching canvas
@@ -16962,10 +17300,12 @@
           p.__mousePressed = true;
           p.mouseDragging = false;
           p.mouseButton = PConstants.LEFT;
+          pressedButtonsMap[MouseEvent.BUTTON1] = true;
 
           if (typeof p.mousePressed === "function") {
             p.mousePressed();
           }
+          dispatchMouseEvent(MouseEvent.MOUSE_PRESSED, MouseEvent.BUTTON1);
         });
 
         // Emulated touch move/mouse move event
@@ -16980,19 +17320,23 @@
             p.mouseDragged();
             p.mouseDragging = true;
           }
+          dispatchMouseEvent(p.__mousePressed ? MouseEvent.MOUSE_DRAGGED : MouseEvent.MOUSE_PRESSED, MouseEvent.BUTTON1);
         });
 
         // Emulated touch up/mouse up event
         attach(curElement, "touchend", function(e) {
-          p.__mousePressed = false;
+          delete pressedButtonsMap[MouseEvent.BUTTON1];
+          p.__mousePressed = pressedButtonsMap.length > 0;
 
           if (typeof p.mouseClicked === "function" && !p.mouseDragging) {
             p.mouseClicked();
           }
+          dispatchMouseEvent(MouseEvent.MOUSE_CLICKED, MouseEvent.BUTTON1, 1);
 
           if (typeof p.mouseReleased === "function") {
             p.mouseReleased();
           }
+          dispatchMouseEvent(MouseEvent.MOUSE_RELEASED, MouseEvent.BUTTON1);
         });
       }
 
@@ -17013,12 +17357,14 @@
         p.mouseDragged();
         p.mouseDragging = true;
       }
+      dispatchMouseEvent(p.__mousePressed ? MouseEvent.MOUSE_DRAGGED : MouseEvent.MOUSE_PRESSED, p.mouseButton);
     });
 
     attach(curElement, "mouseout", function(e) {
       if (typeof p.mouseOut === "function") {
         p.mouseOut();
       }
+      dispatchMouseEvent(MouseEvent.MOUSE_EXITED);
     });
 
     attach(curElement, "mouseover", function(e) {
@@ -17026,6 +17372,7 @@
       if (typeof p.mouseOver === "function") {
         p.mouseOver();
       }
+      dispatchMouseEvent(MouseEvent.MOUSE_ENTERED);
     });
 
     attach(curElement, "mousedown", function(e) {
@@ -17042,22 +17389,27 @@
         p.mouseButton = PConstants.RIGHT;
         break;
       }
+      pressedButtonsMap[e.which] = true;
 
       if (typeof p.mousePressed === "function") {
         p.mousePressed();
       }
+      dispatchMouseEvent(MouseEvent.MOUSE_PRESSED, e.which);
     });
 
     attach(curElement, "mouseup", function(e) {
-      p.__mousePressed = false;
+      delete pressedButtonsMap[e.which];
+      p.__mousePressed = pressedButtonsMap.length > 0;
 
       if (typeof p.mouseClicked === "function" && !p.mouseDragging) {
         p.mouseClicked();
       }
+      dispatchMouseEvent(MouseEvent.MOUSE_CLICKED, e.which, 1);
 
       if (typeof p.mouseReleased === "function") {
         p.mouseReleased();
       }
+      dispatchMouseEvent(MouseEvent.MOUSE_RELEASED, e.which);
     });
 
     var mouseWheelHandler = function(e) {
@@ -17079,6 +17431,11 @@
       }
     };
 
+    function resetButtonPressed() {
+      p.__mousePressed = false;
+      pressedButtonsMap = [];
+    }
+
     // Support Gecko and non-Gecko scroll events
     attach(document, 'DOMMouseScroll', mouseWheelHandler);
     attach(document, 'mousewheel', mouseWheelHandler);
@@ -17086,6 +17443,16 @@
     //////////////////////////////////////////////////////////////////////////
     // Keyboard Events
     //////////////////////////////////////////////////////////////////////////
+
+    function dispatchKeyEvent(id) {
+      var event = new KeyEvent();
+      event.source = p;
+      event.id = id;
+      event.modifiers = buildModifiers();
+      event.keyCode = p.keyCode;
+      event.keyChar = p.key;
+      invokeLibraryMethods("keyEvent", [event]);
+    }
 
     // Get the DOM element if string was passed
     if (typeof curElement === "string") {
@@ -17163,8 +17530,10 @@
       p.key = c;
       p.keyCode = code;
       p.keyPressed();
+      dispatchKeyEvent(KeyEvent.KEY_PRESSED);
       p.keyCode = 0;
       p.keyTyped();
+      dispatchKeyEvent(KeyEvent.KEY_TYPED);
       updateKeyPressed();
     }
 
@@ -17183,6 +17552,7 @@
       p.keyCode = code;
       pressedKeysMap[code] = c;
       p.keyPressed();
+      dispatchKeyEvent(KeyEvent.KEY_PRESSED);
       lastPressedKeyCode = null;
       updateKeyPressed();
       return suppressKeyEvent(e);
@@ -17205,6 +17575,7 @@
       p.key = c;
       p.keyCode = code;
       p.keyReleased();
+      dispatchKeyEvent(KeyEvent.KEY_RELEASED);
       delete pressedKeysMap[code];
       updateKeyPressed();
     }
@@ -17265,6 +17636,7 @@
             doLoop = true; // make sure to keep this true after the noLoop call
           }
           resetKeyPressed();
+          resetButtonPressed();
         });
       }
 
@@ -17425,6 +17797,10 @@
       "touchCancel", "touchEnd", "touchMove", "touchStart", "translate",
       "triangle", "trim", "unbinary", "unhex", "updatePixels", "use3DContext",
       "vertex", "width", "XMLElement", "year",  "__frameRate",
+      "registerPre", "registerDraw", "registerPost", "registerMouseEvent",
+      "registerKeyEvent", "registerSize", "registerStop", "registerDispose",
+      "unregisterPre", "unregisterDraw", "unregisterPost", "unregisterMouseEvent",
+      "unregisterKeyEvent", "unregisterSize", "unregisterStop", "unregisterDispose",
       "__keyPressed", "__mousePressed"];
 
     var members = {};
@@ -18823,7 +19199,7 @@
 
     transformMain = function() {
       var statements = extractClassesAndMethods(atoms[0]);
-      statements = statements.replace(/\bimport\s+[^;]+;/g, "");
+      statements = statements.replace(/\b(import|package)\s+[^;]+;/g, "");
       return new AstRoot( transformStatements(statements,
         transformGlobalMethod, transformGlobalClass) );
     };

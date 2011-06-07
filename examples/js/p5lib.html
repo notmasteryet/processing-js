@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="../../processing.js"></script>
+  <script src="p5lib.js"></script>
+  <script src="../init.js"></script>
+  <link rel="stylesheet" href="../style.css"/></head>
+<body><h1><a href="http://processingjs.org/">Processing.js</a></h1>
+<h2>processing.js libraries</h2>
+
+<p>P5 Libraries</p>
+
+<p>
+<script id="script1" type="application/processing">
+
+void setup() {
+  FrameRateLibrary library = new FrameRateLibrary(this);
+  size(560, 420);
+}
+
+void draw() {
+  color c = color(random(256), random(256), random(256));
+  fill(c);
+  noStroke();
+  float x1 = random(width / 2), x2 = random(width / 2);
+  float y1 = random(height / 2), y2 = random(height / 2);
+  rectMode(CORNERS);
+  rect(x1, y1, x2, y2);
+  rect(width - x1 - 1, y1, width - x2 - 1, y2);
+  rect(x1, height - y1 - 1, x2, height - y2 - 1);
+  rect(width - x1 - 1, height - y1 - 1, width - x2 - 1, height - y2 - 1);
+}
+
+</script><canvas></canvas>
+
+<div style="height:0px;width:0px;overflow:hidden;"></div>
+
+<pre id="code1"></pre>
+
+<div style="height:0px;width:0px;overflow:hidden;"></div>
+
+<p>Copy and paste the following to the processing-helper.html and press "Convert Library to JS" button to retrive the JavaScript file 
+that can be included in the HTML header</p>
+
+<pre id="libraryCode">package libraryexample;
+import processing.core.*;
+
+public class FrameRateLibrary implements PConstants {
+  PApplet parent;
+
+  public FrameRateLibrary(PApplet parent) {
+    this.parent = parent;
+    parent.registerDraw(this);
+  }
+
+  public void draw() {
+    float rate = parent.__frameRate; // using pjs frame rate field 
+    parent.fill(0);
+    parent.rectMode(CORNER);
+    parent.rect(0,3,50,20);
+    parent.fill(255);
+    parent.text(parent.nf(rate,0,2) + " fps", 0, 20);
+  }
+}
+</pre>
+
+<script>
+document.getElementById("code1").textContent = document.getElementById("script1").text;
+</script>
+</body>
+</html>
