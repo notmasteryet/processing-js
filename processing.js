@@ -17946,7 +17946,7 @@
 
     function sortByWeight(array) {
       array.sort(function (a,b) {
-        return b.weight - a.weight;
+        return a.weight - b.weight;
       });
     }
 
@@ -18766,67 +18766,91 @@
     }
 
     function setWeight(ast) {
-      var queue = [], tocheck = {};
-      var id, scopeId, class_;
-      // queue most inner and non-inherited
+      var dependencies = {};
+      var id, scopeId, class_, i, l, r, requires;
+      // build dependencies graph
       for (id in declaredClasses) {
         if (declaredClasses.hasOwnProperty(id)) {
           class_ = declaredClasses[id];
-          if (!class_.inScope && !class_.derived) {
-            queue.push(id);
-            class_.weight = 0;
-          } else {
-            var dependsOn = [];
-            if (class_.inScope) {
-              for (scopeId in class_.inScope) {
-                if (class_.inScope.hasOwnProperty(scopeId)) {
-                  dependsOn.push(class_.inScope[scopeId]);
-                }
+          // inheritance dependecies
+          requires = [];
+          if (class_.base) {
+            requires.push(class_.base.classId);
+          }
+          if (class_.interfaces) {
+            for (i = 0, l = class_.interfaces.length; i < l; ++i) {
+              if (!class_.interfaces[i]) {
+                continue;
               }
+              requires.push(class_.interfaces[i].classId);
             }
-            if (class_.derived) {
-              dependsOn = dependsOn.concat(class_.derived);
+          }
+          if (requires.length > 0) {
+            scopeId = id;
+            while (scopeId) {
+              r = dependencies[scopeId];
+              if (!dependencies.hasOwnProperty(scopeId)) {
+                dependencies[scopeId] = r = {};
+              }
+              appendToLookupTable(r, requires);
+              scopeId = declaredClasses[scopeId].scopeId;
             }
-            tocheck[id] = dependsOn;
+          }
+          // scope dependency
+          scopeId = class_.scopeId;
+          if (scopeId) {
+            r = dependencies[id];
+            if (!dependencies.hasOwnProperty(id)) {
+              dependencies[id] = r = {};
+            }
+            r[scopeId] = null;
           }
         }
       }
-      function removeDependentAndCheck(targetId, from) {
-        var dependsOn = tocheck[targetId];
-        if (!dependsOn) {
-          return false; // no need to process
+      // reverse graph
+      var dependants = {}, p;
+      for (id in dependencies) {
+        if (dependencies.hasOwnProperty(id)) {
+          class_ = declaredClasses[id];
+          requires = dependencies[id];
+          for (p in requires) {
+            if (requires.hasOwnProperty(p)) {
+              r = dependants[p];
+              if (!dependants.hasOwnProperty(p)) {
+                dependants[p] = r = {};
+              }
+              r[id] = null;
+            }
+          }
         }
-        var i = dependsOn.indexOf(from);
-        if (i < 0) {
-          return false;
-        }
-        dependsOn.splice(i, 1);
-        if (dependsOn.length > 0) {
-          return false;
-        }
-        delete tocheck[targetId];
-        return true;
       }
-      while (queue.length > 0) {
-        id = queue.shift();
-        class_ = declaredClasses[id];
-        if (class_.scopeId && removeDependentAndCheck(class_.scopeId, class_)) {
-          queue.push(class_.scopeId);
-          declaredClasses[class_.scopeId].weight = class_.weight + 1;
-        }
-        if (class_.base && removeDependentAndCheck(class_.base.classId, class_)) {
-          queue.push(class_.base.classId);
-          class_.base.weight = class_.weight + 1;
-        }
-        if (class_.interfaces) {
-          var i, l;
-          for (i = 0, l = class_.interfaces.length; i < l; ++i) {
-            if (!class_.interfaces[i] ||
-                !removeDependentAndCheck(class_.interfaces[i].classId, class_)) {
+      // weight painting
+      var weight = 0, dirty = true;
+      while (dirty) {
+        dirty = false;
+        for (id in declaredClasses) {
+          if (declaredClasses.hasOwnProperty(id)) {
+            class_ = declaredClasses[id];
+            if (dependencies.hasOwnProperty(id) || class_.hasOwnProperty("weight")) {
+              // not depend on other classes or was painted
               continue;
             }
-            queue.push(class_.interfaces[i].classId);
-            class_.interfaces[i].weight = class_.weight + 1;
+            // the weight can be assigned
+            class_.weight = weight++;
+            // modify dependencies graph
+            if (dependants.hasOwnProperty(id)) {
+              r = dependants[id];
+              for (p in r) {
+                if (r.hasOwnProperty(p)) {
+                  requires = dependencies[p];
+                  delete requires[id];
+                  if (isLookupTableEmpty(requires)) {
+                    delete dependencies[p];
+                    dirty = true;
+                  }
+                }
+              }
+            }
           }
         }
       }

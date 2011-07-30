@@ -17,6 +17,8 @@ test/parser/Processing-Book-001/Units 43-51/45 Output 2/_04/_04.pde
 test/parser/Processing-Book-001/Units 43-51/45 Output 2/_05/_05.pde
 # startsWith and endsWith String functions
 test/parser/Processing-Book-001/Units 43-51/46 Input 6/_07/_07.pde
+# The static variable initialization by class that declared below (see #1408)
+test/parser/staticClassMember.pde
 # Known issue with overloaded methods
 test/unit/overloadedMethodCall.pde
 
