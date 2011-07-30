@@ -8655,6 +8655,19 @@
       return result;
     };
     /**
+     * The charAt() function returns the character at a given index of a string.
+     *
+     * @param  {int} idx         the index of the character
+     *
+     * @return {String} code     the character
+     */
+    p.__charAt = function(subject, idx) {
+      if (typeof subject !== "string") {
+        return subject.charAt.apply(subject, removeFirstArgument(arguments));
+      }
+      return new Char(subject.charAt(idx));
+    };
+    /**
      * The codePointAt() function returns the unicode value of the character at a given index of a string.
      *
      * @param  {int} idx         the index of the character
@@ -8662,6 +8675,9 @@
      * @return {String} code     the String containing the unicode value of the character
      */
     p.__codePointAt = function(subject, idx) {
+      if (typeof subject !== "string") {
+        return subject.codePointAt.apply(subject, removeFirstArgument(arguments));
+      }
       var code = subject.charCodeAt(idx),
           hi,
           low;
@@ -17220,7 +17236,7 @@
       "__equalsIgnoreCase", "__frameRate", "__hashCode", "__int_cast",
       "__instanceof", "__keyPressed", "__mousePressed", "__printStackTrace",
       "__replace", "__replaceAll", "__replaceFirst", "__toCharArray", "__split",
-      "__codePointAt", "__startsWith", "__endsWith"];
+      "__charAt", "__codePointAt", "__startsWith", "__endsWith"];
 
     var members = {};
     var i, l;
@@ -17590,7 +17606,7 @@
       }
       do {
         repeatJavaReplacement = false;
-        s = s.replace(/((?:'\d+'|\b[A-Za-z_$][\w$]*\s*(?:"[BC]\d+")*)\s*\.\s*(?:[A-Za-z_$][\w$]*\s*(?:"[BC]\d+"\s*)*\.\s*)*)(replace|replaceAll|replaceFirst|contains|equals|equalsIgnoreCase|hashCode|toCharArray|printStackTrace|split|startsWith|endsWith|codePointAt)\s*"B(\d+)"/g,
+        s = s.replace(/((?:'\d+'|\b[A-Za-z_$][\w$]*\s*(?:"[BC]\d+")*)\s*\.\s*(?:[A-Za-z_$][\w$]*\s*(?:"[BC]\d+"\s*)*\.\s*)*)(replace|replaceAll|replaceFirst|contains|equals|equalsIgnoreCase|hashCode|toCharArray|printStackTrace|split|startsWith|endsWith|charAt|codePointAt)\s*"B(\d+)"/g,
           replacePrototypeMethods);
       } while (repeatJavaReplacement);
       // xxx instanceof yyy -> __instanceof(xxx, yyy)
