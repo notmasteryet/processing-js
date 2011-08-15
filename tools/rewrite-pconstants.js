@@ -307,14 +307,14 @@ var PConstants = {
 };
 
 // re-arrange the color expressions
-var regexMaskShift = /\(\s*([a-zA-Z0-9_]+)\s*&\s*(PConstants\.)?(ALPHA|RED|GREEN)_MASK\s*\)\s*>>[>]?\s*(8|16|24)/g;
+var regexMaskShift = /\(\s*([a-zA-Z0-9_]+)\s*&\s*PConstants\.(ALPHA|RED|GREEN)_MASK\s*\)\s*>>[>]?\s*(8|16|24)/g;
 var regexMaskShift2 = /(\(?)\s*([a-zA-Z0-9_]+(\[[^\]]+\]))\s*<<\s*(8|16|24)\s*(\)?)\s*&\s*PConstants\.(ALPHA|RED|GREEN)_MASK/g;
 var regexPConstants = /(PConstants)\s*\.([a-zA-Z0-9_]+)/g;
 
 // Read js file
 var line, undefined;
 while((line = readline()) !== null) {
-  line = line.replace(regexMaskShift, function(str, expr, p1, color, shift) {
+  line = line.replace(regexMaskShift, function(str, expr, color, shift) {
     if ((color == "ALPHA" && shift != "24") ||
         (color == "RED" && shift != "16") ||
         (color == "GREEN" && shift != "8")) return str;
