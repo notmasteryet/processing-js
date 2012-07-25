@@ -1,0 +1,47 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <title>Processing.js test of custom js class</title>
+    <link rel="stylesheet" href="../style.css"/></head>
+    <script type="text/javascript" src="../../processing.js"></script>
+    <script id="jscode">
+      function ClassA() {
+        this.testVar = "Hello, ";
+        this.testMethod = function() {
+          return "World!"
+        };
+      }
+      ClassA.$exports = {
+        fields: ["testVar"],
+        methods: ["testMethod"]
+      };
+      Processing.prototype.ClassA = ClassA;
+    </script>
+    <script id="script1" type="text/processing">
+      class ClassB extends ClassA {
+        public String testMethod2() {
+          return testVar + testMethod();
+        }
+      }
+
+      ClassB b = new ClassB();
+
+      text("Run: " + b.testMethod2(), 0, 50);
+    </script>
+</head>
+<body>
+    <h1>Custom JavaScript class</h1>
+
+    <canvas data-processing-sources="#script1" width="200" height="200" style="margin-left: 10px;"></canvas>
+    <br />
+    <h1>
+        Source Code:</h1>
+    <pre id="code1"></pre>
+    <pre id="code2"></pre>
+    <script>
+      document.getElementById("code1").textContent = document.getElementById("jscode").text;
+      document.getElementById("code2").textContent = document.getElementById("script1").text;
+    </script>
+    <br />
+</body>
+</html>

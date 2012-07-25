@@ -18643,6 +18643,24 @@
         metadata += className + ".$interfaces = [" + resolvedInterfaces.join(", ") + "];\n";
       }
 
+      var addExports = true;
+      if (addExports) {
+        var exportFields = [], exportMethods = [];
+        for (var i in thisClassFields) {
+          if (thisClassFields.hasOwnProperty(i)) {
+            exportFields.push(i);
+          }
+        }
+        for (var i in thisClassMethods) {
+          if (thisClassMethods.hasOwnProperty(i)) {
+            exportMethods.push(i);
+          }
+        }
+        metadata += className + ".$exports = [" +
+         " fields: ['" + exportFields.join("', '") + "'],\n" +
+         " methods: ['" + exportMethods.join("', '") + "']\n];\n";
+     }
+
       if (this.functions.length > 0) {
         result += this.functions.join('\n') + '\n';
       }
@@ -18937,6 +18955,30 @@
       return res;
     };
 
+    function JSClassBody(jsClass) {
+      this.jsClass = jsClass;
+    }
+    JSClassBody.prototype = {
+      getMembers: function(classFields, classMethods, classInners) {
+        var fields = this.jsClass.$exports.fields;
+        if (fields) {
+          for (var i = 0; i < fields.length; i++) {
+            classFields[fields[i]] = true;
+          }
+        }
+        var methods = this.jsClass.$exports.methods;
+        if (methods) {
+          for (var i = 0; i < methods.length; i++) {
+            classMethods[methods[i]] = true;
+          }
+        }
+      }
+    };
+    function JSClass(jsClass) {
+      this.jsClass = jsClass;
+      this.body = new JSClassBody(jsClass);
+    }
+
     function getLocalNames(statements) {
       var localNames = [];
       for(var i=0,l=statements.length;i<l;++i) {
@@ -19066,6 +19108,12 @@
           var baseClassName = class_.body.baseClassName;
           if(baseClassName) {
             var parent = findInScopes(class_, baseClassName);
+            if (!parent && defaultScope.hasOwnProperty(baseClassName)) {
+              var jsClass = defaultScope[baseClassName];
+              if (jsClass.$exports) {
+                parent = new JSClass(jsClass);
+              }
+            }
             if (parent) {
               class_.base = parent;
               if (!parent.derived) {
